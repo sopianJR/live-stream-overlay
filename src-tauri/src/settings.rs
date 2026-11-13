@@ -10,6 +10,7 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 use crate::accelerator;
+use crate::youtube::source;
 
 pub const STORE_FILE: &str = "settings.json";
 const STORE_KEY: &str = "settings";
@@ -167,6 +168,11 @@ impl AppSettings {
             errors.extend(e);
         }
         self.youtube.source = self.youtube.source.trim().to_string();
+        if !self.youtube.source.is_empty() {
+            if let Err(e) = source::parse(&self.youtube.source) {
+                errors.push(format!("Sumber chat: {e}"));
+            }
+        }
         self.overlay.sanitize();
         if errors.is_empty() { Ok(self) } else { Err(errors) }
     }
@@ -317,6 +323,16 @@ mod tests {
         assert_eq!(v.hotkeys.toggle_overlay, "Ctrl+Alt+O");
         assert_eq!(v.hotkeys.toggle_mic, "Ctrl+Shift+M");
         assert_eq!(v.hotkeys.toggle_record, "Ctrl+Shift+R");
+    }
+
+    #[test]
+    fn youtube_source_is_validated() {
+        let mut s = AppSettings::default();
+        s.youtube.source = " @LofiGirl ".into();
+        assert_eq!(s.clone().validated().unwrap().youtube.source, "@LofiGirl");
+        s.youtube.source = "bukan sumber".into();
+        let errors = s.validated().unwrap_err();
+        assert!(errors[0].starts_with("Sumber chat:"), "{errors:?}");
     }
 
     #[test]

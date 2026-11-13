@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
+  ChatSnapshot,
+  ChatStatus,
+  ChatUpdate,
   HotkeyInfo,
   MonitorInfo,
   ObsNotice,
@@ -13,6 +16,8 @@ export const OVERLAY_STATE_EVENT = "overlay://state";
 export const SETTINGS_CHANGED_EVENT = "settings://changed";
 export const OBS_STATUS_EVENT = "obs://status";
 export const OBS_NOTICE_EVENT = "obs://notice";
+export const CHAT_STATUS_EVENT = "chat://status";
+export const CHAT_UPDATE_EVENT = "chat://update";
 
 export const ipc = {
   // Overlay
@@ -53,6 +58,10 @@ export const ipc = {
   obsSetScene: (name: string) => invoke<void>("obs_set_scene", { name }),
   obsListAudioInputs: () => invoke<string[]>("obs_list_audio_inputs"),
 
+  // Chat YouTube
+  chatGetSnapshot: () => invoke<ChatSnapshot>("chat_get_snapshot"),
+  chatReconnect: () => invoke<void>("chat_reconnect"),
+
   appQuit: () => invoke<void>("app_quit"),
 };
 
@@ -66,6 +75,14 @@ export function onObsStatus(cb: (status: ObsStatus) => void): Promise<UnlistenFn
 
 export function onObsNotice(cb: (notice: ObsNotice) => void): Promise<UnlistenFn> {
   return listen<ObsNotice>(OBS_NOTICE_EVENT, (e) => cb(e.payload));
+}
+
+export function onChatStatus(cb: (status: ChatStatus) => void): Promise<UnlistenFn> {
+  return listen<ChatStatus>(CHAT_STATUS_EVENT, (e) => cb(e.payload));
+}
+
+export function onChatUpdate(cb: (update: ChatUpdate) => void): Promise<UnlistenFn> {
+  return listen<ChatUpdate>(CHAT_UPDATE_EVENT, (e) => cb(e.payload));
 }
 
 export function onSettingsChanged(cb: (settings: AppSettings) => void): Promise<UnlistenFn> {

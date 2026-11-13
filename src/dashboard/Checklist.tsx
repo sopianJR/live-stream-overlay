@@ -39,6 +39,39 @@ export const PHASE0_ITEMS: ChecklistItem[] = [
   },
 ];
 
+export const PHASE3_ITEMS: ChecklistItem[] = [
+  {
+    id: "a",
+    title: "Channel belum live terdeteksi",
+    how: "Isi @handle channel Anda saat belum live: status \"menunggu live\" dan dicek ulang tiap 30 detik.",
+  },
+  {
+    id: "b",
+    title: "Tersambung saat live dimulai",
+    how: "Mulai live publik: dalam ±30 detik chat tersambung, judul & jumlah penonton tampil. Live unlisted: pakai URL video.",
+  },
+  {
+    id: "c",
+    title: "Pesan muncul ≤ 3 detik",
+    how: "Kirim chat dari HP. Pesan, emoji, dan badge (moderator/member) tampil benar di overlay.",
+  },
+  {
+    id: "d",
+    title: "Pesan yang dihapus hilang",
+    how: "Hapus pesan atau timeout penonton dari YouTube Studio: pesannya hilang dari overlay.",
+  },
+  {
+    id: "e",
+    title: "Super Chat / member (jika ada)",
+    how: "Super Chat, Super Sticker, member baru, dan hadiah membership tampil dengan warna/ikon khusus.",
+  },
+  {
+    id: "f",
+    title: "Live selesai → menunggu live berikutnya",
+    how: "Akhiri live: status berubah \"menunggu live\". Live berikutnya tersambung otomatis.",
+  },
+];
+
 export const PHASE2_ITEMS: ChecklistItem[] = [
   {
     id: "a",

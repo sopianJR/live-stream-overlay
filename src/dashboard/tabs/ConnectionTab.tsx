@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { CONNECTION_LABEL, formatDuration, streamLabel } from "../../shared/format";
+import {
+  CHAT_STATE_LABEL,
+  CONNECTION_LABEL,
+  formatDuration,
+  formatViewers,
+  streamLabel,
+} from "../../shared/format";
 import { errorText, ipc } from "../../shared/ipc";
-import type { ObsStatus } from "../../shared/types";
+import type { ChatStatus, ObsStatus } from "../../shared/types";
+import { useChatStatus } from "../../shared/useChat";
 import { useObsStatus } from "../../shared/useObsStatus";
 import { FeedbackLine, useFeedback, type TabProps } from "../ui";
 
@@ -267,7 +274,58 @@ function MicField({ settings, save, status }: TabProps & { status: ObsStatus | n
   );
 }
 
+function chatTone(status: ChatStatus): "ok" | "warn" | "bad" | "" {
+  switch (status.state) {
+    case "connected":
+      return "ok";
+    case "failed":
+      return "bad";
+    case "idle":
+      return "";
+    default:
+      return "warn";
+  }
+}
+
+function ChatConnectionStatus({ status }: { status: ChatStatus | null }) {
+  const { busy, run } = useFeedback();
+  if (!status) return null;
+  const tone = chatTone(status);
+  const connected = status.state === "connected";
+
+  return (
+    <div className={`conn-box ${tone}`} role="status">
+      <div className="conn-head">
+        <span className={`chip ${tone}`}>Chat {CHAT_STATE_LABEL[status.state]}</span>
+        <span className="muted">
+          {connected && status.viewers !== null
+            ? `👁 ${formatViewers(status.viewers)} penonton`
+            : status.source || "Sumber belum diisi"}
+        </span>
+        {status.state !== "idle" && (
+          <button
+            type="button"
+            className="secondary small"
+            disabled={busy}
+            onClick={() => void run(ipc.chatReconnect)}
+          >
+            Hubungkan ulang
+          </button>
+        )}
+      </div>
+      {connected && (
+        <p className="conn-msg">
+          <strong>{status.title ?? "Live"}</strong>
+          {status.channel && ` · ${status.channel}`}
+        </p>
+      )}
+      {status.message && <p className="conn-msg">{status.message}</p>}
+    </div>
+  );
+}
+
 function YoutubeCard({ settings, save }: TabProps) {
+  const status = useChatStatus();
   const [source, setSource] = useState(settings.youtube.source);
   const { feedback, busy, run } = useFeedback();
 
@@ -277,16 +335,17 @@ function YoutubeCard({ settings, save }: TabProps) {
     e.preventDefault();
     void run(
       () => save((s) => ({ ...s, youtube: { source } })),
-      source.trim() ? "Sumber chat disimpan." : "Sumber chat dikosongkan.",
+      source.trim() ? "Sumber chat disimpan. Menghubungkan…" : "Sumber chat dikosongkan.",
     );
   };
 
   return (
     <section className="card">
       <h2>YouTube Live Chat</h2>
+      <ChatConnectionStatus status={status} />
       <p className="muted">
-        Isi dengan <strong>URL video live</strong>, <strong>URL channel</strong>, atau{" "}
-        <strong>@handle</strong> channel Anda. Tidak perlu login untuk membaca chat.
+        Isi dengan <strong>@handle</strong> channel Anda (live baru terdeteksi otomatis), atau{" "}
+        <strong>URL video live</strong>. Tidak perlu login untuk membaca chat.
       </p>
       <form className="form" onSubmit={onSave}>
         <label className="field">
@@ -305,7 +364,10 @@ function YoutubeCard({ settings, save }: TabProps) {
         </div>
         <FeedbackLine feedback={feedback} />
       </form>
-      <p className="note info">Chat asli mulai tampil di Fase 3; saat ini overlay masih DEMO.</p>
+      <p className="note info">
+        Live <strong>unlisted</strong> tidak muncul di halaman channel, jadi pakai URL videonya.
+        Chat dibaca dalam mode <em>Live chat</em> (semua pesan, bukan hanya Top chat).
+      </p>
     </section>
   );
 }

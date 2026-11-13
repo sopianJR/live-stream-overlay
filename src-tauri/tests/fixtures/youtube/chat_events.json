@@ -1,0 +1,167 @@
+{
+  "continuationContents": {
+    "liveChatContinuation": {
+      "continuations": [{ "timedContinuationData": { "timeoutMs": 5000, "continuation": "TOKEN_NEXT_2" } }],
+      "actions": [
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatPaidMessageRenderer": {
+                "id": "SC_1",
+                "timestampUsec": "1794535490000000",
+                "authorName": { "simpleText": "@sultan" },
+                "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-sultan" }] },
+                "purchaseAmountText": { "simpleText": "Rp 50.000" },
+                "message": { "runs": [{ "text": "semangat bang!" }] },
+                "headerBackgroundColor": 4280191205,
+                "headerTextColor": 4294967295,
+                "bodyBackgroundColor": 4280723098,
+                "bodyTextColor": 4294967295,
+                "authorExternalChannelId": "UCssssssssssssssssssssss",
+                "authorNameTextColor": 3019898879,
+                "timestampColor": 2164260863
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatPaidStickerRenderer": {
+                "id": "ST_1",
+                "timestampUsec": "1794535491000000",
+                "authorName": { "simpleText": "@pecinta_kucing" },
+                "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-kucing" }] },
+                "authorExternalChannelId": "UCkkkkkkkkkkkkkkkkkkkkkk",
+                "sticker": {
+                  "thumbnails": [
+                    { "url": "//lh3.googleusercontent.com/stiker-40", "width": 40, "height": 40 },
+                    { "url": "//lh3.googleusercontent.com/stiker-80", "width": 80, "height": 80 }
+                  ],
+                  "accessibility": { "accessibilityData": { "label": "Kucing menari" } }
+                },
+                "moneyChipBackgroundColor": 4278239141,
+                "moneyChipTextColor": 4278190080,
+                "purchaseAmountText": { "simpleText": "Rp 20.000" },
+                "stickerDisplayWidth": 40,
+                "stickerDisplayHeight": 40,
+                "backgroundColor": 4278239141,
+                "authorNameTextColor": 3003121664
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatMembershipItemRenderer": {
+                "id": "MB_1",
+                "timestampUsec": "1794535492000000",
+                "authorExternalChannelId": "UCbbbbbbbbbbbbbbbbbbbbbb",
+                "headerSubText": { "runs": [{ "text": "Selamat datang di " }, { "text": "Kanal Uji" }, { "text": "!" }] },
+                "authorName": { "simpleText": "@member_baru" },
+                "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-baru" }] },
+                "authorBadges": [
+                  {
+                    "liveChatAuthorBadgeRenderer": {
+                      "customThumbnail": { "thumbnails": [{ "url": "https://yt3.ggpht.com/badge-baru" }] },
+                      "tooltip": "Member baru",
+                      "accessibility": { "accessibilityData": { "label": "Member baru" } }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatMembershipItemRenderer": {
+                "id": "MB_2",
+                "timestampUsec": "1794535493000000",
+                "authorExternalChannelId": "UCllllllllllllllllllllll",
+                "headerPrimaryText": { "runs": [{ "text": "Member selama " }, { "text": "6" }, { "text": " bulan" }] },
+                "headerSubText": { "simpleText": "Kanal Uji Tier 1" },
+                "message": { "runs": [{ "text": "sudah setengah tahun!" }] },
+                "authorName": { "simpleText": "@member_setia" },
+                "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-setia" }] }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatSponsorshipsGiftPurchaseAnnouncementRenderer": {
+                "id": "GP_1",
+                "timestampUsec": "1794535494000000",
+                "authorExternalChannelId": "UCgggggggggggggggggggggg",
+                "header": {
+                  "liveChatSponsorshipsHeaderRenderer": {
+                    "authorName": { "simpleText": "@dermawan" },
+                    "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-dermawan" }] },
+                    "primaryText": {
+                      "runs": [{ "text": "Menghadiahkan " }, { "text": "5" }, { "text": " membership " }, { "text": "Kanal Uji" }]
+                    },
+                    "image": { "thumbnails": [{ "url": "https://www.gstatic.com/youtube/img/sponsorships/gift.png" }] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "addChatItemAction": {
+            "item": {
+              "liveChatSponsorshipsGiftRedemptionAnnouncementRenderer": {
+                "id": "GR_1",
+                "timestampUsec": "1794535495000000",
+                "authorExternalChannelId": "UCrrrrrrrrrrrrrrrrrrrrrr",
+                "authorName": { "simpleText": "@beruntung" },
+                "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-beruntung" }] },
+                "message": {
+                  "runs": [{ "text": "menerima membership hadiah dari " }, { "text": "@dermawan", "bold": true }]
+                }
+              }
+            }
+          }
+        },
+        {
+          "addLiveChatTickerItemAction": {
+            "item": { "liveChatTickerPaidMessageItemRenderer": { "id": "SC_1" } },
+            "durationSec": "60"
+          }
+        },
+        {
+          "replaceChatItemAction": {
+            "targetItemId": "PLACEHOLDER_1",
+            "replacementItem": {
+              "liveChatTextMessageRenderer": {
+                "id": "MSG_FINAL_1",
+                "timestampUsec": "1794535496000000",
+                "message": { "runs": [{ "text": "pesan setelah diverifikasi" }] },
+                "authorName": { "simpleText": "@penonton_dua" },
+                "authorPhoto": { "thumbnails": [{ "url": "https://yt3.ggpht.com/foto-dua" }] },
+                "authorExternalChannelId": "UCdddddddddddddddddddddd"
+              }
+            }
+          }
+        },
+        { "removeChatItemAction": { "targetItemId": "MSG_DIHAPUS_1" } },
+        {
+          "markChatItemAsDeletedAction": {
+            "deletedStateMessage": { "runs": [{ "text": "[pesan dihapus]" }] },
+            "targetItemId": "MSG_DIHAPUS_2"
+          }
+        },
+        {
+          "markChatItemsByAuthorAsDeletedAction": {
+            "deletedStateMessage": { "runs": [{ "text": "[pesan dihapus]" }] },
+            "externalChannelId": "UCbanbanbanbanbanbanbanb"
+          }
+        }
+      ]
+    }
+  }
+}

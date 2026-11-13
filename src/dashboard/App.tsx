@@ -46,7 +46,7 @@ export default function App() {
           <h1>LiveStream Overlay</h1>
           <p className="subtitle">Live chat YouTube &amp; status OBS di atas game</p>
         </div>
-        <span className="phase-chip">Prototype · Fase 2</span>
+        <span className="phase-chip">Prototype · Fase 3</span>
       </header>
 
       <nav className="tabs" role="tablist">

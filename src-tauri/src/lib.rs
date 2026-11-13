@@ -5,6 +5,8 @@ mod obs;
 mod overlay;
 mod secrets;
 mod settings;
+/// Publik agar bisa dipakai `examples/yt_chat.rs`.
+pub mod youtube;
 
 use std::sync::Mutex;
 
@@ -116,6 +118,7 @@ pub fn run() {
             app.manage(settings::SettingsState(Mutex::new(loaded.clone())));
             overlay::create(app.handle(), loaded.overlay.monitor.as_deref())?;
             obs::init(app.handle());
+            youtube::init(app.handle());
             hotkeys::init(app)?;
             hotkeys::apply(app.handle(), &loaded.hotkeys);
             build_tray(app)?;
@@ -156,6 +159,8 @@ pub fn run() {
             commands::obs_toggle_mic,
             commands::obs_set_scene,
             commands::obs_list_audio_inputs,
+            commands::chat_get_snapshot,
+            commands::chat_reconnect,
             commands::app_quit,
         ])
         .run(tauri::generate_context!())

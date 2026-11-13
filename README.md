@@ -7,7 +7,7 @@ tertangkap di stream.
 Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka panjang
 (OBS, chat, alert) berjalan di Rust, sedangkan React hanya menampilkan state.
 
-> Status: **Fase 2, koneksi OBS selesai.** Status OBS sudah asli; chat masih DEMO (chat YouTube asli di Fase 3).
+> Status: **Fase 3, chat YouTube selesai.** Status OBS dan live chat YouTube sudah asli (tanpa data DEMO).
 
 ## Fitur saat ini
 
@@ -19,11 +19,19 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - tersambung ulang otomatis (1, 2, 4, 8, lalu tiap 10 detik); berhenti mencoba jika password salah
   - kontrol di mode edit: mulai/stop stream (**harus ditahan**), rekam, mute mic, ganti scene
   - notifikasi singkat di overlay untuk hasil hotkey
+- **Live chat YouTube tanpa login** (InnerTube, tanpa kuota API):
+  - sumber berupa `@handle`, URL channel, atau URL video; untuk channel, live baru terdeteksi
+    otomatis (dicek tiap 30 detik)
+  - mode *Live chat* (semua pesan, bukan hanya Top chat), polling ±1,5 detik
+  - emoji (termasuk emoji kustom channel), badge pemilik/moderator/member/terverifikasi,
+    Super Chat & Super Sticker dengan warna tier asli, member baru/milestone, hadiah membership
+  - pesan yang dihapus moderator atau dari penonton yang di-ban ikut hilang
+  - jumlah penonton (tiap 30 detik) di bar status
 - Dashboard bertab:
   - **Overlay:** status, pilih monitor, kepekatan latar, ukuran huruf, durasi pudar chat
-  - **Koneksi:** status koneksi OBS, alamat & password OBS, input mic yang dipantau, sumber chat YouTube
+  - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat YouTube
   - **Hotkey:** ubah kombinasi tombol (direkam langsung, wajib pakai modifier)
-  - **Pengujian:** checklist Fase 2 (OBS) dan Fase 0 (overlay)
+  - **Pengujian:** checklist Fase 3 (chat), Fase 2 (OBS), dan Fase 0 (overlay)
 - System tray, single-instance, dashboard dihancurkan saat ditutup (hemat RAM)
 
 ## Data & log
@@ -83,7 +91,18 @@ cd src-tauri && cargo test
 
 Unit test mencakup parser hotkey, validasi pengaturan, penyimpanan Credential Manager
 (memakai target khusus test yang langsung dihapus), perhitungan bitrate/drop, pengolahan event OBS,
-dan koneksi ke **server OBS tiruan** (password benar/salah/kosong, polling, kontrol, OBS ditutup).
+koneksi ke **server OBS tiruan** (password benar/salah/kosong, polling, kontrol, OBS ditutup),
+serta penguraian chat YouTube dari fixture JSON (`src-tauri/tests/fixtures/youtube/`, berisi data
+rekaan) dan pengenalan format sumber chat.
+
+### Cek chat YouTube dari terminal
+
+```bash
+cd src-tauri && cargo run --example yt_chat -- @namachannel 60
+```
+
+Menampilkan judul live, jumlah penonton, riwayat chat, lalu pesan baru selama 60 detik. Berguna
+untuk memastikan chat sebuah live bisa dibaca tanpa membuka aplikasi.
 
 ### Mencoba tanpa OBS
 
@@ -96,9 +115,19 @@ cd src-tauri && cargo run --example mock_obs -- --live --drop 0.5
 Opsi: `--port 4455`, `--password RAHASIA`, `--live`, `--drop <persen>`, `--kbps <bitrate>`.
 Pastikan WebSocket server OBS asli tidak aktif di port yang sama.
 
-## Checklist Fase 2 (OBS)
+## Checklist Fase 3 (chat YouTube)
 
 Checklist yang sama ada di dashboard → Pengujian dan bisa dicentang di sana.
+
+1. **(a) Belum live:** isi @handle channel Anda → status "menunggu live", dicek ulang tiap 30 detik.
+2. **(b) Live dimulai:** dalam ±30 detik chat tersambung; judul & jumlah penonton tampil.
+   Live *unlisted* tidak muncul di halaman channel, jadi pakai URL videonya.
+3. **(c) Cepat:** chat dari HP muncul di overlay ≤ 3 detik; emoji & badge benar.
+4. **(d) Moderasi:** pesan yang dihapus / penonton yang di-timeout hilang dari overlay.
+5. **(e) Pesan berbayar:** Super Chat, Super Sticker, member baru, dan hadiah membership tampil khusus.
+6. **(f) Live selesai:** status kembali "menunggu live"; live berikutnya tersambung otomatis.
+
+## Checklist Fase 2 (OBS)
 
 1. **(a) Terhubung:** aktifkan WebSocket server di OBS, isi password di tab Koneksi → "Terhubung".
 2. **(b) Password salah:** muncul "Password OBS salah" dan aplikasi berhenti mencoba; password benar → terhubung.
@@ -131,6 +160,8 @@ src-tauri/src/
   overlay/        window overlay, monitor, mode pasif/edit, flag Win32, watchdog topmost
   obs/            koneksi OBS: reconnect, polling & event (mod.rs), snapshot status (status.rs),
                   bitrate & drop % (stats.rs)
+  youtube/        chat YouTube: servis & status (mod.rs), format sumber (source.rs),
+                  klien InnerTube (innertube.rs), penguraian JSON (parse.rs), buffer pesan (buffer.rs)
   settings.rs     struktur & validasi pengaturan, simpan/muat
   accelerator.rs  parser & normalisasi teks hotkey
   hotkeys.rs      hotkey global yang bisa diubah (+ jeda saat direkam)
@@ -139,13 +170,15 @@ src-tauri/src/
   lib.rs          setup aplikasi, tray, plugin, log
 src-tauri/tests/support/mock_obs.rs   server obs-websocket tiruan (test + example)
 src-tauri/examples/mock_obs.rs        `cargo run --example mock_obs`
+src-tauri/examples/yt_chat.rs         `cargo run --example yt_chat -- @handle`
+src-tauri/tests/fixtures/youtube/     contoh respons InnerTube (data rekaan) untuk test parser
 ```
 
 ## Rencana berikutnya
 
 - ~~**Fase 1:** pengaturan, pemilihan monitor, penyimpanan rahasia~~ selesai
 - ~~**Fase 2:** OBS WebSocket (status asli + kontrol)~~ selesai
-- **Fase 3:** chat YouTube via InnerTube + jumlah penonton
+- ~~**Fase 3:** chat YouTube via InnerTube + jumlah penonton~~ selesai
 - **Fase 4:** alert masalah stream
 - **Fase 5:** balas chat (OAuth + YouTube Data API)
 - **Fase 6:** polishing & installer

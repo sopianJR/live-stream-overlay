@@ -1,4 +1,4 @@
-// Cermin tipe Rust (src-tauri/src/{overlay,hotkeys,settings}.rs, src-tauri/src/obs/status.rs).
+// Cermin tipe Rust (src-tauri/src/{overlay,hotkeys,settings}.rs, obs/status.rs, youtube/*.rs).
 
 export interface OverlayStatus {
   visible: boolean;
@@ -126,4 +126,73 @@ export interface ObsStatus {
 export interface ObsNotice {
   text: string;
   error: boolean;
+}
+
+// ---------- Chat YouTube ----------
+
+export type ChatRun = { type: "text"; text: string } | { type: "emoji"; alt: string; url: string };
+
+export type ChatMessageKind =
+  | "text"
+  | "superChat"
+  | "superSticker"
+  | "membership"
+  | "giftPurchase"
+  | "giftRedemption";
+
+export interface ChatAuthor {
+  name: string;
+  channelId: string;
+  photo: string | null;
+  owner: boolean;
+  moderator: boolean;
+  verified: boolean;
+  member: boolean;
+  memberBadge: string | null;
+  memberLabel: string | null;
+}
+
+/** Warna CSS dari YouTube sesuai tier Super Chat. */
+export interface PaidColors {
+  headerBg: string;
+  headerText: string;
+  bodyBg: string;
+  bodyText: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  kind: ChatMessageKind;
+  author: ChatAuthor;
+  runs: ChatRun[];
+  timestampMs: number;
+  amount: string | null;
+  header: string | null;
+  sticker: string | null;
+  colors: PaidColors | null;
+}
+
+export type ChatState = "idle" | "resolving" | "waiting" | "connected" | "retrying" | "failed";
+
+export interface ChatStatus {
+  state: ChatState;
+  message: string | null;
+  source: string;
+  videoId: string | null;
+  title: string | null;
+  channel: string | null;
+  viewers: number | null;
+}
+
+export interface ChatUpdate {
+  /** Buang semua pesan lama dulu (pindah ke live lain). */
+  reset: boolean;
+  upserts: ChatMessage[];
+  removedIds: string[];
+  removedAuthors: string[];
+}
+
+export interface ChatSnapshot {
+  status: ChatStatus;
+  messages: ChatMessage[];
 }

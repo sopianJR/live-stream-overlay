@@ -1,8 +1,17 @@
-import { Checklist, PHASE0_ITEMS, PHASE2_ITEMS } from "../Checklist";
+import { Checklist, PHASE0_ITEMS, PHASE2_ITEMS, PHASE3_ITEMS } from "../Checklist";
 
 export function TestingTab() {
   return (
     <div className="grid">
+      <section className="card wide">
+        <h2>Checklist Fase 3 · chat YouTube</h2>
+        <Checklist
+          storageKey="phase3-checklist"
+          items={PHASE3_ITEMS}
+          doneText="Fase 3 selesai, lanjut ke Fase 4 (alert masalah stream)."
+        />
+      </section>
+
       <section className="card wide">
         <h2>Checklist Fase 2 · OBS</h2>
         <Checklist
@@ -37,7 +46,11 @@ export function TestingTab() {
             <code>src-tauri</code>: <code>cargo run --example mock_obs -- --live</code> (port 4455,
             tanpa password).
           </li>
-          <li>Chat di overlay masih DEMO; chat YouTube asli dibuat di Fase 3.</li>
+          <li>
+            Cek cepat apakah chat sebuah live bisa dibaca, tanpa membuka aplikasi:{" "}
+            <code>cargo run --example yt_chat -- @namachannel</code> (dari folder{" "}
+            <code>src-tauri</code>).
+          </li>
         </ul>
       </section>
     </div>

@@ -1,0 +1,54 @@
+{
+  "responseContext": {},
+  "contents": {
+    "twoColumnWatchNextResults": {
+      "results": {
+        "results": {
+          "contents": [
+            {
+              "videoPrimaryInfoRenderer": {
+                "title": { "runs": [{ "text": "Main ranked malam ini 🎮" }] },
+                "viewCount": {
+                  "videoViewCountRenderer": {
+                    "viewCount": { "runs": [{ "text": "3.224" }, { "text": " sedang menonton" }] },
+                    "isLive": true,
+                    "originalViewCount": "3224"
+                  }
+                },
+                "dateText": { "simpleText": "Mulai streaming pada 13 Nov 2026" }
+              }
+            },
+            {
+              "videoSecondaryInfoRenderer": {
+                "owner": {
+                  "videoOwnerRenderer": {
+                    "title": { "runs": [{ "text": "Kanal Uji", "navigationEndpoint": {} }] },
+                    "subscriberCountText": { "simpleText": "1,2 rb subscriber" }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "conversationBar": {
+        "liveChatRenderer": {
+          "continuations": [{ "reloadContinuationData": { "continuation": "TOKEN_TOP_CHAT" } }],
+          "header": {
+            "liveChatHeaderRenderer": {
+              "viewSelector": {
+                "sortFilterSubMenuRenderer": {
+                  "subMenuItems": [
+                    { "title": "Chat teratas", "selected": true, "continuation": { "reloadContinuationData": { "continuation": "PENDEK1" } } },
+                    { "title": "Live chat", "selected": false, "continuation": { "reloadContinuationData": { "continuation": "PENDEK2" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "initialDisplayState": "LIVE_CHAT_DISPLAY_STATE_EXPANDED"
+        }
+      }
+    }
+  }
+}

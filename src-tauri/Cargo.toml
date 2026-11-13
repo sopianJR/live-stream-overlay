@@ -26,6 +26,9 @@ tokio = { version = "1", features = ["macros", "sync", "time"] }
 futures-util = "0.3"
 # Tipe durasi yang dipakai di API obws.
 time = "0.3"
+# InnerTube (chat YouTube). TLS bawaan Windows (SChannel) agar tidak butuh toolchain tambahan.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "gzip", "json", "system-proxy"] }
+url = "2"
 
 [dev-dependencies]
 # Server OBS tiruan untuk test & `cargo run --example mock_obs` (lihat tests/support/mock_obs.rs).

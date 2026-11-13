@@ -1,4 +1,20 @@
-import type { ObsConnection, ObsStatus } from "./types";
+import type { ChatState, ObsConnection, ObsStatus } from "./types";
+
+const NUMBER = new Intl.NumberFormat("id-ID");
+
+/** 3215 → "3.215" */
+export function formatViewers(n: number): string {
+  return NUMBER.format(n);
+}
+
+export const CHAT_STATE_LABEL: Record<ChatState, string> = {
+  idle: "belum diatur",
+  resolving: "mencari live…",
+  waiting: "menunggu live",
+  connected: "tersambung",
+  retrying: "mencoba ulang",
+  failed: "gagal",
+};
 
 /** 3723000 → "01:02:03" */
 export function formatDuration(ms: number): string {

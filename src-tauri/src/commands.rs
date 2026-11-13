@@ -7,6 +7,7 @@ use crate::obs::{self, ObsService, ObsStatus};
 use crate::overlay::{self, MonitorInfo, OverlayManager, OverlayStatus};
 use crate::secrets;
 use crate::settings::{self, AppSettings, SettingsState};
+use crate::youtube::{ChatService, ChatSnapshot};
 
 fn to_string_err(e: tauri::Error) -> String {
     e.to_string()
@@ -80,6 +81,9 @@ pub fn settings_save(
         obs.reconnect();
     } else if next.obs.mic_input != prev.obs.mic_input {
         obs.refresh_mic();
+    }
+    if next.youtube.source != prev.youtube.source {
+        app.state::<ChatService>().reconnect();
     }
     if let Err(e) = app.emit(settings::CHANGED_EVENT, &next) {
         log::warn!("gagal emit perubahan pengaturan: {e}");
@@ -166,6 +170,18 @@ pub async fn obs_set_scene(app: AppHandle, name: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn obs_list_audio_inputs(app: AppHandle) -> Result<Vec<String>, String> {
     obs::list_audio_inputs(&app).await
+}
+
+// ---------- Chat YouTube ----------
+
+#[tauri::command]
+pub fn chat_get_snapshot(chat: State<'_, ChatService>) -> ChatSnapshot {
+    chat.snapshot()
+}
+
+#[tauri::command]
+pub fn chat_reconnect(chat: State<'_, ChatService>) {
+    chat.reconnect();
 }
 
 // ---------- Aplikasi ----------

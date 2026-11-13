@@ -4,9 +4,11 @@ import {
   formatBitrate,
   formatDuration,
   formatPct,
+  formatViewers,
   streamLabel,
 } from "../../shared/format";
 import type { ObsStatus } from "../../shared/types";
+import { useChatStatus } from "../../shared/useChat";
 import { useObsNotice, useObsStatus } from "../../shared/useObsStatus";
 import { ObsControls } from "./ObsControls";
 
@@ -77,7 +79,9 @@ function ConnectedBar({ status }: { status: ObsStatus }) {
 export function ObsStatusWidget({ editMode }: { editMode: boolean }) {
   const status = useObsStatus();
   const notice = useObsNotice();
+  const chat = useChatStatus();
   const connected = status?.connection === "connected";
+  const viewers = chat?.state === "connected" ? chat.viewers : null;
 
   return (
     <div className="obs-widget">
@@ -93,6 +97,11 @@ export function ObsStatusWidget({ editMode }: { editMode: boolean }) {
             </span>
             <span className="obs-item">{OFFLINE_TEXT[status.connection as keyof typeof OFFLINE_TEXT]}</span>
           </>
+        )}
+        {viewers !== null && (
+          <span className="obs-item mono" title="Penonton YouTube saat ini">
+            👁 {formatViewers(viewers)}
+          </span>
         )}
       </div>
 
