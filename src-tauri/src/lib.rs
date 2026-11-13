@@ -1,6 +1,7 @@
 mod accelerator;
 mod commands;
 mod hotkeys;
+mod obs;
 mod overlay;
 mod secrets;
 mod settings;
@@ -114,6 +115,7 @@ pub fn run() {
             let loaded = settings::load(app.handle());
             app.manage(settings::SettingsState(Mutex::new(loaded.clone())));
             overlay::create(app.handle(), loaded.overlay.monitor.as_deref())?;
+            obs::init(app.handle());
             hotkeys::init(app)?;
             hotkeys::apply(app.handle(), &loaded.hotkeys);
             build_tray(app)?;
@@ -146,6 +148,14 @@ pub fn run() {
             commands::obs_password_status,
             commands::obs_password_set,
             commands::obs_password_clear,
+            commands::obs_get_status,
+            commands::obs_reconnect,
+            commands::obs_start_stream,
+            commands::obs_stop_stream,
+            commands::obs_toggle_record,
+            commands::obs_toggle_mic,
+            commands::obs_set_scene,
+            commands::obs_list_audio_inputs,
             commands::app_quit,
         ])
         .run(tauri::generate_context!())

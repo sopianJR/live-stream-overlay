@@ -6,6 +6,8 @@ import { FeedbackLine, useFeedback, type TabProps } from "../ui";
 const DEFAULT_HOTKEYS: HotkeySettings = {
   toggleOverlay: "Ctrl+Shift+O",
   toggleEdit: "Ctrl+Shift+E",
+  toggleMic: "Ctrl+Shift+M",
+  toggleRecord: "Ctrl+Shift+R",
 };
 
 const MODIFIER_CODES = new Set([

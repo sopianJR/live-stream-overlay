@@ -95,7 +95,7 @@ export default function App() {
         minHeight={36}
         onChange={updateWidget}
       >
-        <ObsStatusWidget />
+        <ObsStatusWidget editMode={editMode} />
       </WidgetFrame>
 
       <WidgetFrame

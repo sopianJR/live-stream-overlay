@@ -25,11 +25,20 @@ pub const CHAT_FADE_RANGE: (u32, u32) = (5, 300);
 pub struct ObsSettings {
     pub host: String,
     pub port: u16,
+    /// Nama input audio OBS yang dipantau sebagai mic. `None` = input "Mic/Aux" global OBS.
+    pub mic_input: Option<String>,
 }
 
 impl Default for ObsSettings {
     fn default() -> Self {
-        Self { host: "127.0.0.1".into(), port: 4455 }
+        Self { host: "127.0.0.1".into(), port: 4455, mic_input: None }
+    }
+}
+
+impl ObsSettings {
+    /// Perubahan yang mengharuskan koneksi dibuat ulang.
+    pub fn same_endpoint(&self, other: &Self) -> bool {
+        self.host == other.host && self.port == other.port
     }
 }
 
@@ -37,6 +46,7 @@ impl ObsSettings {
     fn validate(&mut self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
         self.host = self.host.trim().to_string();
+        self.mic_input = self.mic_input.take().map(|m| m.trim().to_string()).filter(|m| !m.is_empty());
         if self.host.is_empty() {
             errors.push("Host OBS tidak boleh kosong.".to_string());
         } else if self.host.contains("://") || self.host.chars().any(char::is_whitespace) {
@@ -96,25 +106,41 @@ impl OverlaySettings {
 pub struct HotkeySettings {
     pub toggle_overlay: String,
     pub toggle_edit: String,
+    pub toggle_mic: String,
+    pub toggle_record: String,
 }
 
 impl Default for HotkeySettings {
     fn default() -> Self {
-        Self { toggle_overlay: "Ctrl+Shift+O".into(), toggle_edit: "Ctrl+Shift+E".into() }
+        Self {
+            toggle_overlay: "Ctrl+Shift+O".into(),
+            toggle_edit: "Ctrl+Shift+E".into(),
+            toggle_mic: "Ctrl+Shift+M".into(),
+            toggle_record: "Ctrl+Shift+R".into(),
+        }
     }
 }
 
 impl HotkeySettings {
+    fn fields_mut(&mut self) -> [&mut String; 4] {
+        [&mut self.toggle_overlay, &mut self.toggle_edit, &mut self.toggle_mic, &mut self.toggle_record]
+    }
+
     fn validate(&mut self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        for field in [&mut self.toggle_overlay, &mut self.toggle_edit] {
+        for field in self.fields_mut() {
             match accelerator::normalize(field) {
                 Ok(normalized) => *field = normalized,
                 Err(e) => errors.push(e),
             }
         }
-        if errors.is_empty() && self.toggle_overlay == self.toggle_edit {
-            errors.push(format!("Hotkey \"{}\" dipakai untuk dua aksi berbeda.", self.toggle_overlay));
+        if errors.is_empty() {
+            let all = self.fields_mut().map(|f| f.clone());
+            for (i, accel) in all.iter().enumerate() {
+                if all[..i].contains(accel) {
+                    errors.push(format!("Hotkey \"{accel}\" dipakai untuk dua aksi berbeda."));
+                }
+            }
         }
         if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
@@ -221,6 +247,7 @@ mod tests {
         let s: AppSettings = serde_json::from_str(r#"{"obs":{"port":4460}}"#).unwrap();
         assert_eq!(s.obs.port, 4460);
         assert_eq!(s.obs.host, "127.0.0.1");
+        assert_eq!(s.obs.mic_input, None);
         assert_eq!(s.hotkeys, HotkeySettings::default());
         assert_eq!(s.overlay.chat_fade_seconds, 15);
     }
@@ -272,6 +299,33 @@ mod tests {
         s.hotkeys.toggle_edit = "ctrl+shift+o".into();
         let errors = s.validated().unwrap_err();
         assert!(errors[0].contains("dua aksi"));
+
+        let mut s = AppSettings::default();
+        s.hotkeys.toggle_record = "Shift+Ctrl+M".into();
+        let errors = s.validated().unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("Ctrl+Shift+M"), "{errors:?}");
+    }
+
+    #[test]
+    fn settings_from_phase_one_get_new_hotkeys() {
+        let s: AppSettings = serde_json::from_str(
+            r#"{"hotkeys":{"toggleOverlay":"Ctrl+Alt+O","toggleEdit":"Ctrl+Alt+E"}}"#,
+        )
+        .unwrap();
+        let v = s.validated().unwrap();
+        assert_eq!(v.hotkeys.toggle_overlay, "Ctrl+Alt+O");
+        assert_eq!(v.hotkeys.toggle_mic, "Ctrl+Shift+M");
+        assert_eq!(v.hotkeys.toggle_record, "Ctrl+Shift+R");
+    }
+
+    #[test]
+    fn mic_input_is_trimmed() {
+        let mut s = AppSettings::default();
+        s.obs.mic_input = Some("  Mic Podcast ".into());
+        assert_eq!(s.clone().validated().unwrap().obs.mic_input.as_deref(), Some("Mic Podcast"));
+        s.obs.mic_input = Some("   ".into());
+        assert_eq!(s.validated().unwrap().obs.mic_input, None);
     }
 
     #[test]

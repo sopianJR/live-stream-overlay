@@ -1,9 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AppSettings, HotkeyInfo, MonitorInfo, OverlayStatus } from "./types";
+import type {
+  AppSettings,
+  HotkeyInfo,
+  MonitorInfo,
+  ObsNotice,
+  ObsStatus,
+  OverlayStatus,
+} from "./types";
 
 export const OVERLAY_STATE_EVENT = "overlay://state";
 export const SETTINGS_CHANGED_EVENT = "settings://changed";
+export const OBS_STATUS_EVENT = "obs://status";
+export const OBS_NOTICE_EVENT = "obs://notice";
 
 export const ipc = {
   // Overlay
@@ -31,11 +40,32 @@ export const ipc = {
   obsPasswordSet: (password: string) => invoke<void>("obs_password_set", { password }),
   obsPasswordClear: () => invoke<void>("obs_password_clear"),
 
+  // OBS
+  obsGetStatus: () => invoke<ObsStatus>("obs_get_status"),
+  obsReconnect: () => invoke<void>("obs_reconnect"),
+  obsStartStream: () => invoke<void>("obs_start_stream"),
+  /** Tanpa konfirmasi di sisi Rust: UI wajib meminta konfirmasi (tahan tombol) dulu. */
+  obsStopStream: () => invoke<void>("obs_stop_stream"),
+  /** true = rekaman kini berjalan. */
+  obsToggleRecord: () => invoke<boolean>("obs_toggle_record"),
+  /** true = mic kini di-mute. */
+  obsToggleMic: () => invoke<boolean>("obs_toggle_mic"),
+  obsSetScene: (name: string) => invoke<void>("obs_set_scene", { name }),
+  obsListAudioInputs: () => invoke<string[]>("obs_list_audio_inputs"),
+
   appQuit: () => invoke<void>("app_quit"),
 };
 
 export function onOverlayStatus(cb: (status: OverlayStatus) => void): Promise<UnlistenFn> {
   return listen<OverlayStatus>(OVERLAY_STATE_EVENT, (e) => cb(e.payload));
+}
+
+export function onObsStatus(cb: (status: ObsStatus) => void): Promise<UnlistenFn> {
+  return listen<ObsStatus>(OBS_STATUS_EVENT, (e) => cb(e.payload));
+}
+
+export function onObsNotice(cb: (notice: ObsNotice) => void): Promise<UnlistenFn> {
+  return listen<ObsNotice>(OBS_NOTICE_EVENT, (e) => cb(e.payload));
 }
 
 export function onSettingsChanged(cb: (settings: AppSettings) => void): Promise<UnlistenFn> {

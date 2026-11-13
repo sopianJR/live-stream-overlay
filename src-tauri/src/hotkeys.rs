@@ -12,21 +12,29 @@ use tauri::{App, AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::settings::HotkeySettings;
+use crate::obs::{self, QuickAction};
 use crate::{accelerator, overlay};
 
+// Semua aksi memang berupa toggle; nama lengkapnya lebih mudah dibaca di pemanggil.
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     ToggleOverlay,
     ToggleEditMode,
+    ToggleMic,
+    ToggleRecord,
 }
 
 impl Action {
-    const ALL: [Action; 2] = [Action::ToggleOverlay, Action::ToggleEditMode];
+    const ALL: [Action; 4] =
+        [Action::ToggleOverlay, Action::ToggleEditMode, Action::ToggleMic, Action::ToggleRecord];
 
     fn id(self) -> &'static str {
         match self {
             Action::ToggleOverlay => "toggleOverlay",
             Action::ToggleEditMode => "toggleEdit",
+            Action::ToggleMic => "toggleMic",
+            Action::ToggleRecord => "toggleRecord",
         }
     }
 
@@ -34,6 +42,8 @@ impl Action {
         match self {
             Action::ToggleOverlay => "Tampilkan / sembunyikan overlay",
             Action::ToggleEditMode => "Mode edit / interaksi overlay",
+            Action::ToggleMic => "Mute / unmute mic di OBS",
+            Action::ToggleRecord => "Mulai / hentikan rekaman OBS",
         }
     }
 
@@ -41,13 +51,24 @@ impl Action {
         match self {
             Action::ToggleOverlay => &settings.toggle_overlay,
             Action::ToggleEditMode => &settings.toggle_edit,
+            Action::ToggleMic => &settings.toggle_mic,
+            Action::ToggleRecord => &settings.toggle_record,
         }
     }
 
     fn run(self, app: &AppHandle) {
         let result = match self {
-            Action::ToggleOverlay => overlay::toggle_visible(app),
-            Action::ToggleEditMode => overlay::toggle_edit_mode(app),
+            Action::ToggleOverlay => overlay::toggle_visible(app).map(|_| ()),
+            Action::ToggleEditMode => overlay::toggle_edit_mode(app).map(|_| ()),
+            // Perintah OBS berjalan async; hasilnya muncul sebagai notifikasi di overlay.
+            Action::ToggleMic => {
+                obs::spawn_quick_action(app, QuickAction::ToggleMic);
+                Ok(())
+            }
+            Action::ToggleRecord => {
+                obs::spawn_quick_action(app, QuickAction::ToggleRecord);
+                Ok(())
+            }
         };
         if let Err(e) = result {
             log::warn!("aksi hotkey gagal: {e}");

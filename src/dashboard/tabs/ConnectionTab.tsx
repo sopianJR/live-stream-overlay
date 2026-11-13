@@ -1,5 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { ipc } from "../../shared/ipc";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { CONNECTION_LABEL, formatDuration, streamLabel } from "../../shared/format";
+import { errorText, ipc } from "../../shared/ipc";
+import type { ObsStatus } from "../../shared/types";
+import { useObsStatus } from "../../shared/useObsStatus";
 import { FeedbackLine, useFeedback, type TabProps } from "../ui";
 
 export function ConnectionTab({ settings, save }: TabProps) {
@@ -11,7 +14,53 @@ export function ConnectionTab({ settings, save }: TabProps) {
   );
 }
 
+function connectionTone(status: ObsStatus): "ok" | "warn" | "bad" {
+  if (status.connection === "connected") return "ok";
+  if (status.connection === "connecting" || status.connection === "retrying") return "warn";
+  return "bad";
+}
+
+function ObsConnectionStatus({ status }: { status: ObsStatus | null }) {
+  const { busy, run } = useFeedback();
+  if (!status) return null;
+  const tone = connectionTone(status);
+  const { stream, record } = status;
+
+  return (
+    <div className={`conn-box ${tone}`} role="status">
+      <div className="conn-head">
+        <span className={`chip ${tone}`}>{CONNECTION_LABEL[status.connection]}</span>
+        <span className="muted">
+          {status.endpoint}
+          {status.obsVersion && ` · OBS ${status.obsVersion}`}
+        </span>
+        <button
+          type="button"
+          className="secondary small"
+          disabled={busy}
+          onClick={() => void run(ipc.obsReconnect)}
+        >
+          Hubungkan ulang
+        </button>
+      </div>
+      {status.message && <p className="conn-msg">{status.message}</p>}
+      {status.connection === "retrying" && status.attempt > 1 && (
+        <small className="muted">Dicoba ulang otomatis (percobaan ke-{status.attempt}).</small>
+      )}
+      {status.connection === "connected" && (
+        <p className="conn-msg">
+          Stream: <strong>{streamLabel(status).text}</strong>
+          {stream.active && ` ${formatDuration(stream.durationMs)}`} · Rekaman:{" "}
+          <strong>{record.active ? (record.paused ? "dijeda" : "berjalan") : "tidak"}</strong> ·
+          Scene: <strong>{status.scene ?? "–"}</strong>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ObsCard({ settings, save }: TabProps) {
+  const status = useObsStatus();
   const [host, setHost] = useState(settings.obs.host);
   const [port, setPort] = useState(String(settings.obs.port));
   const server = useFeedback();
@@ -29,16 +78,17 @@ function ObsCard({ settings, save }: TabProps) {
       return;
     }
     void server.run(
-      () => save((s) => ({ ...s, obs: { host, port: portNum } })),
-      "Alamat OBS disimpan.",
+      () => save((s) => ({ ...s, obs: { ...s.obs, host, port: portNum } })),
+      "Alamat OBS disimpan. Menghubungkan ulang…",
     );
   };
 
-  const dirty = host !== settings.obs.host || port !== String(settings.obs.port);
+  const dirty = host.trim() !== settings.obs.host || port !== String(settings.obs.port);
 
   return (
     <section className="card">
       <h2>OBS WebSocket</h2>
+      <ObsConnectionStatus status={status} />
       <p className="muted">
         Di OBS: <strong>Tools → WebSocket Server Settings</strong> → centang{" "}
         <em>Enable WebSocket server</em>, lalu klik <em>Show Connect Info</em> untuk melihat port
@@ -69,7 +119,7 @@ function ObsCard({ settings, save }: TabProps) {
       </form>
 
       <PasswordField />
-      <p className="note info">Koneksi ke OBS diaktifkan di Fase 2.</p>
+      <MicField settings={settings} save={save} status={status} />
     </section>
   );
 }
@@ -89,7 +139,7 @@ function PasswordField() {
       await ipc.obsPasswordSet(value);
       setValue("");
       setHasPassword(true);
-    }, "Password disimpan di Windows Credential Manager.");
+    }, "Password disimpan di Windows Credential Manager. Menghubungkan ulang…");
   };
 
   const onClear = () =>
@@ -129,9 +179,91 @@ function PasswordField() {
       </div>
       <small className="muted">
         Password disimpan terenkripsi di Windows Credential Manager, bukan di file pengaturan.
+        Kosongkan jika autentikasi di OBS dimatikan.
       </small>
       <FeedbackLine feedback={feedback} />
     </form>
+  );
+}
+
+function MicField({ settings, save, status }: TabProps & { status: ObsStatus | null }) {
+  const [inputs, setInputs] = useState<string[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const { feedback, busy, run } = useFeedback();
+  const connected = status?.connection === "connected";
+
+  const loadInputs = useCallback(async () => {
+    setListError(null);
+    try {
+      setInputs(await ipc.obsListAudioInputs());
+    } catch (e) {
+      setListError(errorText(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (connected) void loadInputs();
+    else setInputs(null);
+  }, [connected, loadInputs]);
+
+  const current = settings.obs.micInput ?? "";
+  const options = inputs ?? [];
+  // Pilihan tersimpan tetap ditampilkan walau daftar belum dimuat / input sudah tidak ada.
+  const showCurrentSeparately = current !== "" && !options.includes(current);
+  const missing = showCurrentSeparately && inputs !== null;
+
+  const onChange = (value: string) =>
+    run(
+      () => save((s) => ({ ...s, obs: { ...s.obs, micInput: value || null } })),
+      value ? `Mic dipantau dari input "${value}".` : "Mic dipantau dari Mic/Aux global OBS.",
+    );
+
+  return (
+    <div className="form mic">
+      <div className="field-row">
+        <label className="field grow">
+          <span>
+            Input mic yang dipantau{" "}
+            {status?.mic && (
+              <span className={status.mic.muted ? "status bad" : "status ok"}>
+                {status.mic.muted ? "mute" : "aktif"}
+              </span>
+            )}
+          </span>
+          <select value={current} disabled={busy} onChange={(e) => void onChange(e.target.value)}>
+            <option value="">Mic/Aux global OBS (default)</option>
+            {showCurrentSeparately && (
+              <option value={current}>
+                {current}
+                {missing ? " (tidak ada di OBS)" : ""}
+              </option>
+            )}
+            {options.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!connected || busy}
+          onClick={() => void loadInputs()}
+        >
+          Muat ulang
+        </button>
+      </div>
+      <small className="muted">
+        {connected
+          ? "Daftar berisi input audio di OBS."
+          : "Hubungkan ke OBS untuk melihat daftar input audio."}{" "}
+        Dipakai untuk ikon mic di overlay, tombol mute, dan hotkey {settings.hotkeys.toggleMic}.
+      </small>
+      {status?.micNote && <p className="note warn">{status.micNote}</p>}
+      {listError && <p className="msg error">{listError}</p>}
+      <FeedbackLine feedback={feedback} />
+    </div>
   );
 }
 

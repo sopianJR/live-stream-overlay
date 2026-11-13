@@ -1,68 +1,107 @@
-import { useEffect, useState } from "react";
+import {
+  CONNECTION_LABEL,
+  dropLevel,
+  formatBitrate,
+  formatDuration,
+  formatPct,
+  streamLabel,
+} from "../../shared/format";
+import type { ObsStatus } from "../../shared/types";
+import { useObsNotice, useObsStatus } from "../../shared/useObsStatus";
+import { ObsControls } from "./ObsControls";
 
-// DEMO Fase 0: angka disimulasikan. Fase 2 menggantinya dengan data OBS WebSocket asli.
+/** Teks singkat untuk bar saat belum terhubung; penjelasan lengkap ada di mode edit & dashboard. */
+const OFFLINE_TEXT = {
+  connecting: "Menghubungkan ke OBS…",
+  retrying: "OBS belum terhubung",
+  authFailed: "Password OBS salah",
+  failed: "Koneksi OBS gagal",
+} as const;
 
-interface DemoStats {
-  seconds: number;
-  bitrateKbps: number;
-  dropPct: number;
-  fps: number;
-  micMuted: boolean;
-}
-
-function formatDuration(total: number): string {
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
-}
-
-function useDemoStats(): DemoStats {
-  const [stats, setStats] = useState<DemoStats>({
-    seconds: 0,
-    bitrateKbps: 6000,
-    dropPct: 0,
-    fps: 60,
-    micMuted: false,
-  });
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setStats((prev) => {
-        const seconds = prev.seconds + 1;
-        const bitrateKbps = Math.round(
-          Math.min(6500, Math.max(5400, prev.bitrateKbps + (Math.random() - 0.5) * 300)),
-        );
-        // Sesekali simulasikan lonjakan dropped frames untuk melihat warna peringatan.
-        const spike = seconds % 45 > 40;
-        const dropPct = spike ? 1.5 + Math.random() * 2 : Math.random() * 0.2;
-        const fps = spike ? 57 + Math.round(Math.random() * 2) : 60;
-        const micMuted = seconds % 60 >= 50;
-        return { seconds, bitrateKbps, dropPct, fps, micMuted };
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  return stats;
-}
-
-export function ObsStatusWidget() {
-  const s = useDemoStats();
-  const dropClass = s.dropPct >= 5 ? "bad" : s.dropPct >= 1 ? "warn" : "ok";
+function ConnectedBar({ status }: { status: ObsStatus }) {
+  const { stream, record, perf, mic } = status;
+  const label = streamLabel(status);
 
   return (
-    <div className="obs-bar">
-      <span className="obs-live">
-        <span className="live-dot" /> LIVE <span className="mono">{formatDuration(s.seconds)}</span>
-      </span>
-      <span className="obs-item mono">{(s.bitrateKbps / 1000).toFixed(1)} Mbps</span>
-      <span className={`obs-item mono ${dropClass}`}>drop {s.dropPct.toFixed(1)}%</span>
-      <span className="obs-item mono">{s.fps} fps</span>
-      <span className={s.micMuted ? "obs-item bad" : "obs-item"}>
-        {s.micMuted ? "🔇 mic mute" : "🎙 mic"}
-      </span>
-      <span className="demo-tag">DEMO</span>
+    <>
+      {label.tone === "live" ? (
+        <span className="obs-live">
+          <span className="live-dot" /> LIVE <span className="mono">{formatDuration(stream.durationMs)}</span>
+        </span>
+      ) : (
+        <span className={`obs-state ${label.tone}`}>
+          {label.text}
+          {stream.active && <span className="mono"> {formatDuration(stream.durationMs)}</span>}
+        </span>
+      )}
+
+      {stream.active && (
+        <>
+          <span className="obs-item mono">{formatBitrate(stream.bitrateKbps)}</span>
+          <span
+            className={`obs-item mono ${dropLevel(stream.droppedPct)}`}
+            title={`${stream.droppedFrames} dari ${stream.totalFrames} frame di-drop sejak mulai`}
+          >
+            drop {formatPct(stream.droppedPct)}
+          </span>
+        </>
+      )}
+
+      {perf && <span className="obs-item mono">{Math.round(perf.fps)} fps</span>}
+
+      {record.active && (
+        <span className={record.paused ? "obs-item warn" : "obs-item rec"}>
+          {record.paused ? "⏸ REC" : "● REC"} <span className="mono">{formatDuration(record.durationMs)}</span>
+        </span>
+      )}
+
+      {mic ? (
+        <span className={mic.muted ? "obs-item bad" : "obs-item"} title={mic.name}>
+          {mic.muted ? "🔇 mic mute" : "🎙 mic"}
+        </span>
+      ) : (
+        <span className="obs-item dim" title={status.micNote ?? ""}>
+          🎙 ?
+        </span>
+      )}
+
+      {status.scene && (
+        <span className="obs-item scene" title="Scene aktif">
+          {status.scene}
+        </span>
+      )}
+    </>
+  );
+}
+
+export function ObsStatusWidget({ editMode }: { editMode: boolean }) {
+  const status = useObsStatus();
+  const notice = useObsNotice();
+  const connected = status?.connection === "connected";
+
+  return (
+    <div className="obs-widget">
+      <div className="obs-bar">
+        {!status ? (
+          <span className="obs-item dim">Memuat status OBS…</span>
+        ) : connected ? (
+          <ConnectedBar status={status} />
+        ) : (
+          <>
+            <span className={`obs-conn ${status.connection}`} title={CONNECTION_LABEL[status.connection]}>
+              ● OBS
+            </span>
+            <span className="obs-item">{OFFLINE_TEXT[status.connection as keyof typeof OFFLINE_TEXT]}</span>
+          </>
+        )}
+      </div>
+
+      {(notice || (editMode && status)) && (
+        <div className="obs-below">
+          {notice && <div className={notice.error ? "obs-notice bad" : "obs-notice"}>{notice.text}</div>}
+          {editMode && status && <ObsControls status={status} />}
+        </div>
+      )}
     </div>
   );
 }

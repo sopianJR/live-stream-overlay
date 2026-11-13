@@ -1,8 +1,9 @@
 //! Command yang dipanggil frontend via `invoke`.
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::hotkeys::{self, HotkeyInfo, HotkeyRegistry};
+use crate::obs::{self, ObsService, ObsStatus};
 use crate::overlay::{self, MonitorInfo, OverlayManager, OverlayStatus};
 use crate::secrets;
 use crate::settings::{self, AppSettings, SettingsState};
@@ -72,6 +73,14 @@ pub fn settings_save(
 
     settings::persist(&app, &next)?;
     state.set(next.clone());
+
+    // Servis OBS membaca pengaturan dari state, jadi diberi tahu setelah `state.set`.
+    let obs = app.state::<ObsService>();
+    if !next.obs.same_endpoint(&prev.obs) {
+        obs.reconnect();
+    } else if next.obs.mic_input != prev.obs.mic_input {
+        obs.refresh_mic();
+    }
     if let Err(e) = app.emit(settings::CHANGED_EVENT, &next) {
         log::warn!("gagal emit perubahan pengaturan: {e}");
     }
@@ -103,13 +112,60 @@ pub fn obs_password_status() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn obs_password_set(password: String) -> Result<(), String> {
-    secrets::set_obs_password(&password)
+pub fn obs_password_set(obs: State<'_, ObsService>, password: String) -> Result<(), String> {
+    secrets::set_obs_password(&password)?;
+    obs.reconnect();
+    Ok(())
 }
 
 #[tauri::command]
-pub fn obs_password_clear() -> Result<(), String> {
-    secrets::clear_obs_password()
+pub fn obs_password_clear(obs: State<'_, ObsService>) -> Result<(), String> {
+    secrets::clear_obs_password()?;
+    obs.reconnect();
+    Ok(())
+}
+
+// ---------- OBS ----------
+
+#[tauri::command]
+pub fn obs_get_status(obs: State<'_, ObsService>) -> ObsStatus {
+    obs.status()
+}
+
+#[tauri::command]
+pub fn obs_reconnect(obs: State<'_, ObsService>) {
+    obs.reconnect();
+}
+
+#[tauri::command]
+pub async fn obs_start_stream(app: AppHandle) -> Result<(), String> {
+    obs::start_stream(&app).await
+}
+
+/// Konfirmasi (tahan tombol) dilakukan di UI; command ini langsung menghentikan stream.
+#[tauri::command]
+pub async fn obs_stop_stream(app: AppHandle) -> Result<(), String> {
+    obs::stop_stream(&app).await
+}
+
+#[tauri::command]
+pub async fn obs_toggle_record(app: AppHandle) -> Result<bool, String> {
+    obs::toggle_record(&app).await
+}
+
+#[tauri::command]
+pub async fn obs_toggle_mic(app: AppHandle) -> Result<bool, String> {
+    obs::toggle_mic(&app).await
+}
+
+#[tauri::command]
+pub async fn obs_set_scene(app: AppHandle, name: String) -> Result<(), String> {
+    obs::set_scene(&app, &name).await
+}
+
+#[tauri::command]
+pub async fn obs_list_audio_inputs(app: AppHandle) -> Result<Vec<String>, String> {
+    obs::list_audio_inputs(&app).await
 }
 
 // ---------- Aplikasi ----------

@@ -426,3 +426,53 @@ button:disabled {
 .top-gap {
   margin-top: 12px;
 }
+
+/* ---------- Status koneksi OBS ---------- */
+.chip.bad {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+}
+button.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.conn-box {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  background: var(--bg);
+}
+.conn-box.ok {
+  border-left-color: var(--ok-text);
+}
+.conn-box.warn {
+  border-left-color: var(--warn-text);
+}
+.conn-box.bad {
+  border-left-color: var(--bad-text);
+}
+.conn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.conn-head .muted {
+  margin: 0;
+  flex: 1;
+}
+.conn-msg {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.form.mic {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.form.mic .note.warn {
+  margin: 0;
+}

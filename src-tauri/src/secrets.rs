@@ -17,8 +17,7 @@ pub fn set_obs_password(password: &str) -> Result<(), String> {
     imp::write(OBS_PASSWORD_TARGET, password)
 }
 
-/// Dipakai koneksi OBS (Fase 2).
-#[allow(dead_code)]
+/// Dibaca servis OBS setiap kali akan menghubungkan; tidak pernah dikirim ke frontend.
 pub fn obs_password() -> Result<Option<String>, String> {
     imp::read(OBS_PASSWORD_TARGET)
 }

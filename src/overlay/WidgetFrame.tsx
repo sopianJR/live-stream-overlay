@@ -31,6 +31,8 @@ export function WidgetFrame({
   return (
     <Rnd
       bounds="parent"
+      // Elemen interaktif (tombol, dropdown) di dalam widget tidak memulai seret.
+      cancel=".no-drag"
       size={{ width: rect.w * vw, height: rect.h * vh }}
       position={{ x: rect.x * vw, y: rect.y * vh }}
       minWidth={minWidth}
