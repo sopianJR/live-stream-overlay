@@ -104,6 +104,10 @@ impl ChatService {
         self.shared.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    pub fn status(&self) -> ChatStatus {
+        self.lock().status.clone()
+    }
+
     pub fn snapshot(&self) -> ChatSnapshot {
         let shared = self.lock();
         ChatSnapshot { status: shared.status.clone(), messages: shared.buffer.messages() }

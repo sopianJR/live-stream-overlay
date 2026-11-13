@@ -476,3 +476,71 @@ button.small {
 .form.mic .note.warn {
   margin: 0;
 }
+
+/* ---------- Tab Alert ---------- */
+input[type="number"] {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+  width: 100%;
+}
+.field-row .field {
+  flex: 1;
+}
+.field small {
+  font-size: 11px;
+}
+
+.alert-list,
+.rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.alert-list li {
+  display: grid;
+  grid-template-columns: 130px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  border-left: 4px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+}
+.alert-list li.level-critical {
+  border-left-color: var(--bad-text);
+}
+.alert-list li.level-warning {
+  border-left-color: var(--warn-text);
+}
+.alert-list li.level-reminder {
+  border-left-color: var(--accent);
+}
+.alert-list small,
+.rules small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.alert-level {
+  font-weight: 700;
+  font-size: 12px;
+}
+.rules li {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.rules li:last-child {
+  border-bottom: none;
+}

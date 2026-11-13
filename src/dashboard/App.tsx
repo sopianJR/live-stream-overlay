@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ipc } from "../shared/ipc";
 import { useSettings } from "../shared/useSettings";
+import { AlertTab } from "./tabs/AlertTab";
 import { ConnectionTab } from "./tabs/ConnectionTab";
 import { HotkeyTab } from "./tabs/HotkeyTab";
 import { OverlayTab } from "./tabs/OverlayTab";
@@ -9,6 +10,7 @@ import { TestingTab } from "./tabs/TestingTab";
 const TABS = [
   { id: "overlay", label: "Overlay" },
   { id: "connection", label: "Koneksi" },
+  { id: "alerts", label: "Alert" },
   { id: "hotkeys", label: "Hotkey" },
   { id: "testing", label: "Pengujian" },
 ] as const;
@@ -46,7 +48,7 @@ export default function App() {
           <h1>LiveStream Overlay</h1>
           <p className="subtitle">Live chat YouTube &amp; status OBS di atas game</p>
         </div>
-        <span className="phase-chip">Prototype · Fase 3</span>
+        <span className="phase-chip">Prototype · Fase 4</span>
       </header>
 
       <nav className="tabs" role="tablist">
@@ -70,6 +72,8 @@ export default function App() {
           <OverlayTab settings={settings} save={save} />
         ) : tab === "connection" ? (
           <ConnectionTab settings={settings} save={save} />
+        ) : tab === "alerts" ? (
+          <AlertTab settings={settings} save={save} />
         ) : tab === "hotkeys" ? (
           <HotkeyTab settings={settings} save={save} />
         ) : (

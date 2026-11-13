@@ -1,7 +1,7 @@
 //! Server OBS tiruan untuk mencoba aplikasi tanpa OBS asli.
 //!
 //! ```text
-//! cargo run --example mock_obs -- [--port 4455] [--password RAHASIA] [--live] [--drop 2.5] [--kbps 6000]
+//! cargo run --example mock_obs -- [--port 4455] [--password RAHASIA] [--live] [--drop 2.5] [--kbps 6000] [--mic-muted]
 //! ```
 //!
 //! Lalu arahkan dashboard → Koneksi ke `127.0.0.1` dan port yang sama.
@@ -21,6 +21,7 @@ fn parse_args() -> Result<(u16, MockConfig), String> {
             "--port" => port = value("--port")?.parse().map_err(|e| format!("--port: {e}"))?,
             "--password" => config.password = Some(value("--password")?),
             "--live" => config.live = true,
+            "--mic-muted" => config.mic_muted = true,
             "--drop" => config.drop_pct = value("--drop")?.parse().map_err(|e| format!("--drop: {e}"))?,
             "--kbps" => config.bitrate_kbps = value("--kbps")?.parse().map_err(|e| format!("--kbps: {e}"))?,
             other => return Err(format!("argumen tidak dikenal: {other}")),

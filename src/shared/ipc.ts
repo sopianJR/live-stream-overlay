@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  Alert,
   AppSettings,
   ChatSnapshot,
   ChatStatus,
@@ -18,6 +19,7 @@ export const OBS_STATUS_EVENT = "obs://status";
 export const OBS_NOTICE_EVENT = "obs://notice";
 export const CHAT_STATUS_EVENT = "chat://status";
 export const CHAT_UPDATE_EVENT = "chat://update";
+export const ALERT_UPDATE_EVENT = "alert://update";
 
 export const ipc = {
   // Overlay
@@ -62,6 +64,12 @@ export const ipc = {
   chatGetSnapshot: () => invoke<ChatSnapshot>("chat_get_snapshot"),
   chatReconnect: () => invoke<void>("chat_reconnect"),
 
+  // Alert
+  alertsGet: () => invoke<Alert[]>("alerts_get"),
+  alertsDismiss: (id: string) => invoke<Alert[]>("alerts_dismiss", { id }),
+  /** Contoh alert selama 10 detik. */
+  alertsTest: () => invoke<Alert[]>("alerts_test"),
+
   appQuit: () => invoke<void>("app_quit"),
 };
 
@@ -83,6 +91,10 @@ export function onChatStatus(cb: (status: ChatStatus) => void): Promise<Unlisten
 
 export function onChatUpdate(cb: (update: ChatUpdate) => void): Promise<UnlistenFn> {
   return listen<ChatUpdate>(CHAT_UPDATE_EVENT, (e) => cb(e.payload));
+}
+
+export function onAlerts(cb: (alerts: Alert[]) => void): Promise<UnlistenFn> {
+  return listen<Alert[]>(ALERT_UPDATE_EVENT, (e) => cb(e.payload));
 }
 
 export function onSettingsChanged(cb: (settings: AppSettings) => void): Promise<UnlistenFn> {

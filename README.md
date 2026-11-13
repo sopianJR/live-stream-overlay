@@ -7,7 +7,7 @@ tertangkap di stream.
 Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka panjang
 (OBS, chat, alert) berjalan di Rust, sedangkan React hanya menampilkan state.
 
-> Status: **Fase 3, chat YouTube selesai.** Status OBS dan live chat YouTube sudah asli (tanpa data DEMO).
+> Status: **Fase 4, alert masalah stream selesai.** Status OBS, live chat YouTube, dan alert sudah asli.
 
 ## Fitur saat ini
 
@@ -27,11 +27,20 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
     Super Chat & Super Sticker dengan warna tier asli, member baru/milestone, hadiah membership
   - pesan yang dihapus moderator atau dari penonton yang di-ban ikut hilang
   - jumlah penonton (tiap 30 detik) di bar status
+- **Alert masalah stream** (widget sendiri, bisa digeser):
+  - **kritis** (menetap): stream menyambung ulang, stream berhenti mendadak, koneksi OBS putus
+    saat live, frame drop ≥ 5%
+  - **peringatan** (10 detik, diulang berkala): frame drop ≥ 1%, bitrate turun di bawah 50% dari
+    normal, jaringan padat, CPU OBS tinggi, frame terlewat saat render/encoding
+  - **pengingat**: mic mute saat live (tiap 2 menit), chat YouTube bermasalah atau live belum terdeteksi
+  - stop yang disengaja (dari aplikasi atau tombol Stop di OBS) tidak dianggap masalah
+  - debounce agar lonjakan sesaat tidak memicu alert; semua alert tercatat di log
 - Dashboard bertab:
   - **Overlay:** status, pilih monitor, kepekatan latar, ukuran huruf, durasi pudar chat
   - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat YouTube
+  - **Alert:** alert aktif, ambang (frame drop, bitrate, CPU, pengingat mic), tombol *Tes alert*
   - **Hotkey:** ubah kombinasi tombol (direkam langsung, wajib pakai modifier)
-  - **Pengujian:** checklist Fase 3 (chat), Fase 2 (OBS), dan Fase 0 (overlay)
+  - **Pengujian:** checklist Fase 4 (alert), Fase 3 (chat), Fase 2 (OBS), dan Fase 0 (overlay)
 - System tray, single-instance, dashboard dihancurkan saat ditutup (hemat RAM)
 
 ## Data & log
@@ -92,8 +101,9 @@ cd src-tauri && cargo test
 Unit test mencakup parser hotkey, validasi pengaturan, penyimpanan Credential Manager
 (memakai target khusus test yang langsung dihapus), perhitungan bitrate/drop, pengolahan event OBS,
 koneksi ke **server OBS tiruan** (password benar/salah/kosong, polling, kontrol, OBS ditutup),
-serta penguraian chat YouTube dari fixture JSON (`src-tauri/tests/fixtures/youtube/`, berisi data
-rekaan) dan pengenalan format sumber chat.
+penguraian chat YouTube dari fixture JSON (`src-tauri/tests/fixtures/youtube/`, berisi data
+rekaan), pengenalan format sumber chat, serta skenario linimasa mesin alert (debounce, cooldown,
+eskalasi, stop disengaja vs mendadak, OBS putus saat live).
 
 ### Cek chat YouTube dari terminal
 
@@ -112,8 +122,19 @@ Server obs-websocket tiruan bisa dijalankan sendiri, mis. untuk melihat overlay 
 cd src-tauri && cargo run --example mock_obs -- --live --drop 0.5
 ```
 
-Opsi: `--port 4455`, `--password RAHASIA`, `--live`, `--drop <persen>`, `--kbps <bitrate>`.
+Opsi: `--port 4455`, `--password RAHASIA`, `--live`, `--drop <persen>`, `--kbps <bitrate>`,
+`--mic-muted`. Contoh memicu alert: `--live --drop 3 --mic-muted`, lalu matikan server tiruan untuk
+melihat alert "Koneksi ke OBS putus saat live".
 Pastikan WebSocket server OBS asli tidak aktif di port yang sama.
+
+## Checklist Fase 4 (alert)
+
+1. **(a) Posisi:** dashboard → Alert → *Tes alert*; atur widget Alert di mode edit agar tidak menutupi HUD game.
+2. **(b) Mic:** mute mic saat live → pengingat setelah ±10 detik, diulang tiap 2 menit.
+3. **(c) Internet:** batasi upload / matikan Wi-Fi sebentar saat live → alert frame drop atau "menyambung ulang".
+4. **(d) Stop disengaja:** stop dari aplikasi → tanpa alert; stop dari OBS → info singkat saja.
+5. **(e) OBS ditutup saat live** → alert kritis "Koneksi ke OBS putus saat live".
+6. **(f) Log:** setelah stream, setiap alert tercatat di file log beserta jam dan penjelasannya.
 
 ## Checklist Fase 3 (chat YouTube)
 
@@ -162,6 +183,7 @@ src-tauri/src/
                   bitrate & drop % (stats.rs)
   youtube/        chat YouTube: servis & status (mod.rs), format sumber (source.rs),
                   klien InnerTube (innertube.rs), penguraian JSON (parse.rs), buffer pesan (buffer.rs)
+  alerts/         alert: servis 1 Hz (mod.rs), aturan murni + test linimasa (engine.rs)
   settings.rs     struktur & validasi pengaturan, simpan/muat
   accelerator.rs  parser & normalisasi teks hotkey
   hotkeys.rs      hotkey global yang bisa diubah (+ jeda saat direkam)
@@ -179,6 +201,6 @@ src-tauri/tests/fixtures/youtube/     contoh respons InnerTube (data rekaan) unt
 - ~~**Fase 1:** pengaturan, pemilihan monitor, penyimpanan rahasia~~ selesai
 - ~~**Fase 2:** OBS WebSocket (status asli + kontrol)~~ selesai
 - ~~**Fase 3:** chat YouTube via InnerTube + jumlah penonton~~ selesai
-- **Fase 4:** alert masalah stream
+- ~~**Fase 4:** alert masalah stream~~ selesai
 - **Fase 5:** balas chat (OAuth + YouTube Data API)
 - **Fase 6:** polishing & installer

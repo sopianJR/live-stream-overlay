@@ -6,6 +6,7 @@ import type { Layout, OverlaySettings, WidgetId, WidgetRect } from "../shared/ty
 import { useOverlayStatus } from "../shared/useOverlayStatus";
 import { useSettings } from "../shared/useSettings";
 import { WidgetFrame } from "./WidgetFrame";
+import { AlertsWidget } from "./widgets/AlertsWidget";
 import { ChatWidget } from "./widgets/ChatWidget";
 import { ObsStatusWidget } from "./widgets/ObsStatusWidget";
 
@@ -109,6 +110,19 @@ export default function App() {
         onChange={updateWidget}
       >
         <ChatWidget editMode={editMode} />
+      </WidgetFrame>
+
+      <WidgetFrame
+        id="alerts"
+        title="Alert"
+        rect={layout.alerts}
+        viewport={viewport}
+        editMode={editMode}
+        minWidth={240}
+        minHeight={60}
+        onChange={updateWidget}
+      >
+        <AlertsWidget editMode={editMode} />
       </WidgetFrame>
     </div>
   );

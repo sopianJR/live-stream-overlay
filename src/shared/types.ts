@@ -1,4 +1,5 @@
-// Cermin tipe Rust (src-tauri/src/{overlay,hotkeys,settings}.rs, obs/status.rs, youtube/*.rs).
+// Cermin tipe Rust (src-tauri/src/{overlay,hotkeys,settings}.rs, obs/status.rs, youtube/*.rs,
+// alerts/engine.rs).
 
 export interface OverlayStatus {
   visible: boolean;
@@ -51,14 +52,28 @@ export interface HotkeySettings {
   toggleRecord: string;
 }
 
+export interface AlertSettings {
+  enabled: boolean;
+  /** Peringatan jika frame di-drop (10 detik terakhir) mencapai persentase ini. */
+  droppedWarnPct: number;
+  /** Alert kritis (menetap) mulai persentase ini. */
+  droppedCriticalPct: number;
+  /** Persentase dari bitrate normal; 0 = mati. */
+  lowBitratePct: number;
+  /** CPU OBS; 0 = mati. */
+  cpuPct: number;
+  micReminder: boolean;
+}
+
 export interface AppSettings {
   obs: ObsSettings;
   youtube: YoutubeSettings;
   overlay: OverlaySettings;
   hotkeys: HotkeySettings;
+  alerts: AlertSettings;
 }
 
-export type WidgetId = "obsStatus" | "chat";
+export type WidgetId = "obsStatus" | "chat" | "alerts";
 
 /** Posisi & ukuran widget dalam pecahan viewport (0..1), agar tidak bergantung resolusi. */
 export interface WidgetRect {
@@ -195,4 +210,18 @@ export interface ChatUpdate {
 export interface ChatSnapshot {
   status: ChatStatus;
   messages: ChatMessage[];
+}
+
+// ---------- Alert ----------
+
+export type AlertLevel = "info" | "reminder" | "warning" | "critical";
+
+export interface Alert {
+  id: string;
+  level: AlertLevel;
+  title: string;
+  detail: string | null;
+  raisedAtMs: number;
+  /** Naik setiap kali alert (di)tampilkan. */
+  seq: number;
 }

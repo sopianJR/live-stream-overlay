@@ -30,8 +30,8 @@ use tokio::time::MissedTickBehavior;
 use crate::secrets;
 use crate::settings::{ObsSettings, SettingsState};
 use stats::StatsTracker;
-pub use status::ObsStatus;
-use status::{Connection, EventEffect, MicInfo, PollSample};
+pub use status::{Connection, ObsStatus, StreamStop};
+use status::{EventEffect, MicInfo, PollSample};
 
 pub const STATUS_EVENT: &str = "obs://status";
 pub const NOTICE_EVENT: &str = "obs://notice";
@@ -86,7 +86,8 @@ impl ObsService {
         self.lock().client.clone().ok_or_else(|| "OBS belum terhubung.".to_string())
     }
 
-    fn now_ms(&self) -> u64 {
+    /// Jam monoton servis OBS; dipakai juga oleh mesin alert.
+    pub fn now_ms(&self) -> u64 {
         u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 }
@@ -505,6 +506,12 @@ pub async fn start_stream(app: &AppHandle) -> Result<(), String> {
 
 pub async fn stop_stream(app: &AppHandle) -> Result<(), String> {
     let client = client(app)?;
+    // Dicatat sebelum perintah dikirim agar event STOPPED tidak dianggap stream putus.
+    let now = app.state::<ObsService>().now_ms();
+    update(app, |s| {
+        s.app_stop_at_ms = Some(now);
+        false
+    });
     call(client.streaming().stop()).await?;
     log::info!("stream dihentikan dari aplikasi");
     Ok(())

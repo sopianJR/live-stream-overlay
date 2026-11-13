@@ -12,6 +12,8 @@ export const DEFAULT_LAYOUT: Layout = {
   obsStatus: { x: 0.012, y: 0.015, w: 0.36, h: 0.06 },
   // Panel chat di kanan bawah.
   chat: { x: 0.75, y: 0.5, w: 0.235, h: 0.45 },
+  // Alert di tengah atas, mudah terlihat tapi tidak menutupi tengah layar.
+  alerts: { x: 0.33, y: 0.09, w: 0.34, h: 0.2 },
 };
 
 let storePromise: Promise<Store> | null = null;

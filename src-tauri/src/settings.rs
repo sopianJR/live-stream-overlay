@@ -20,6 +20,11 @@ pub const OPACITY_RANGE: (f64, f64) = (0.3, 1.0);
 pub const FONT_SCALE_RANGE: (f64, f64) = (0.8, 1.6);
 /// 0 = pesan chat tidak pernah memudar.
 pub const CHAT_FADE_RANGE: (u32, u32) = (5, 300);
+pub const DROPPED_PCT_RANGE: (f64, f64) = (0.1, 50.0);
+/// 0 = alert bitrate rendah dimatikan.
+pub const LOW_BITRATE_PCT_RANGE: (u32, u32) = (10, 90);
+/// 0 = alert CPU dimatikan.
+pub const CPU_PCT_RANGE: (u32, u32) = (50, 100);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -147,6 +152,62 @@ impl HotkeySettings {
     }
 }
 
+/// Ambang alert masalah stream (lihat `alerts/engine.rs`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AlertSettings {
+    pub enabled: bool,
+    /// Peringatan jika frame di-drop (10 detik terakhir) mencapai persentase ini.
+    pub dropped_warn_pct: f64,
+    /// Alert kritis (menetap) mulai persentase ini.
+    pub dropped_critical_pct: f64,
+    /// Peringatan jika bitrate di bawah persentase ini dari bitrate normal. 0 = mati.
+    pub low_bitrate_pct: u32,
+    /// Peringatan jika CPU OBS mencapai persentase ini. 0 = mati.
+    pub cpu_pct: u32,
+    /// Ingatkan tiap 2 menit jika mic masih mute saat live.
+    pub mic_reminder: bool,
+}
+
+impl Default for AlertSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            dropped_warn_pct: 1.0,
+            dropped_critical_pct: 5.0,
+            low_bitrate_pct: 50,
+            cpu_pct: 90,
+            mic_reminder: true,
+        }
+    }
+}
+
+fn clamp_or_off(value: u32, (min, max): (u32, u32)) -> u32 {
+    if value == 0 { 0 } else { value.clamp(min, max) }
+}
+
+impl AlertSettings {
+    /// Nilai di luar rentang dipaskan; ambang kritis tidak boleh di bawah ambang peringatan.
+    fn sanitize(&mut self) {
+        let d = Self::default();
+        self.dropped_warn_pct = clamp_f64(self.dropped_warn_pct, DROPPED_PCT_RANGE, d.dropped_warn_pct);
+        self.dropped_critical_pct =
+            clamp_f64(self.dropped_critical_pct, DROPPED_PCT_RANGE, d.dropped_critical_pct);
+        self.low_bitrate_pct = clamp_or_off(self.low_bitrate_pct, LOW_BITRATE_PCT_RANGE);
+        self.cpu_pct = clamp_or_off(self.cpu_pct, CPU_PCT_RANGE);
+    }
+
+    fn validate(&mut self) -> Result<(), Vec<String>> {
+        self.sanitize();
+        if self.dropped_critical_pct < self.dropped_warn_pct {
+            return Err(vec![
+                "Ambang kritis frame drop harus sama atau lebih besar dari ambang peringatan.".into(),
+            ]);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
@@ -154,6 +215,7 @@ pub struct AppSettings {
     pub youtube: YoutubeSettings,
     pub overlay: OverlaySettings,
     pub hotkeys: HotkeySettings,
+    pub alerts: AlertSettings,
 }
 
 impl AppSettings {
@@ -173,6 +235,9 @@ impl AppSettings {
                 errors.push(format!("Sumber chat: {e}"));
             }
         }
+        if let Err(e) = self.alerts.validate() {
+            errors.extend(e);
+        }
         self.overlay.sanitize();
         if errors.is_empty() { Ok(self) } else { Err(errors) }
     }
@@ -189,6 +254,10 @@ impl AppSettings {
             self.hotkeys = HotkeySettings::default();
         }
         self.youtube.source = self.youtube.source.trim().to_string();
+        if self.alerts.validate().is_err() {
+            log::warn!("ambang alert tidak konsisten, ambang kritis disamakan dengan peringatan");
+            self.alerts.dropped_critical_pct = self.alerts.dropped_warn_pct;
+        }
         self.overlay.sanitize();
         self
     }
@@ -333,6 +402,24 @@ mod tests {
         s.youtube.source = "bukan sumber".into();
         let errors = s.validated().unwrap_err();
         assert!(errors[0].starts_with("Sumber chat:"), "{errors:?}");
+    }
+
+    #[test]
+    fn alert_thresholds() {
+        let mut s = AppSettings::default();
+        s.alerts.dropped_warn_pct = 0.0;
+        s.alerts.low_bitrate_pct = 5;
+        s.alerts.cpu_pct = 0;
+        let v = s.validated().unwrap();
+        assert_eq!(v.alerts.dropped_warn_pct, DROPPED_PCT_RANGE.0);
+        assert_eq!(v.alerts.low_bitrate_pct, LOW_BITRATE_PCT_RANGE.0);
+        assert_eq!(v.alerts.cpu_pct, 0, "0 = dimatikan");
+
+        let mut s = AppSettings::default();
+        s.alerts.dropped_warn_pct = 8.0;
+        s.alerts.dropped_critical_pct = 3.0;
+        assert!(s.clone().validated().unwrap_err()[0].contains("kritis"));
+        assert_eq!(s.repaired().alerts.dropped_critical_pct, 8.0);
     }
 
     #[test]

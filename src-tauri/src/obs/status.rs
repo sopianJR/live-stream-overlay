@@ -73,6 +73,14 @@ pub struct PerfInfo {
     pub encode_lag_pct: Option<f64>,
 }
 
+/// Stream berhenti (event `STOPPED`). `graceful` = didahului `STOPPING`, artinya stop diminta
+/// (dari OBS atau aplikasi ini). Stream yang mati karena error langsung `STOPPED`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamStop {
+    pub at_ms: u64,
+    pub graceful: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicInfo {
@@ -100,6 +108,12 @@ pub struct ObsStatus {
     pub mic: Option<MicInfo>,
     /// Alasan mic tidak tersedia (mis. input tidak ditemukan).
     pub mic_note: Option<String>,
+    /// Untuk mesin alert; tidak dikirim ke frontend.
+    #[serde(skip)]
+    pub last_stop: Option<StreamStop>,
+    /// Kapan aplikasi ini terakhir meminta stop stream (jam servis OBS).
+    #[serde(skip)]
+    pub app_stop_at_ms: Option<u64>,
 }
 
 impl ObsStatus {
@@ -117,6 +131,8 @@ impl ObsStatus {
             scenes: Vec::new(),
             mic: None,
             mic_note: None,
+            last_stop: None,
+            app_stop_at_ms: None,
         }
     }
 
@@ -242,8 +258,10 @@ pub fn apply_event(
                     stream.reconnecting = false;
                 }
                 OutputState::Stopped => {
+                    let graceful = stream.transition == Some(Transition::Stopping);
                     tracker.reset_stream();
                     *stream = StreamInfo::default();
+                    status.last_stop = Some(StreamStop { at_ms: t_ms, graceful });
                 }
                 _ => return EventEffect::Unchanged,
             }
@@ -389,6 +407,17 @@ mod tests {
         assert_eq!(s.stream.transition, Some(Transition::Stopping));
         apply_event(&mut s, &mut t, 3_100, &stream_ev(false, "STOPPED"));
         assert_eq!(s.stream, StreamInfo::default());
+        assert_eq!(s.last_stop, Some(StreamStop { at_ms: 3_100, graceful: true }));
+    }
+
+    #[test]
+    fn stop_without_stopping_is_not_graceful() {
+        let mut s = connected();
+        let mut t = StatsTracker::default();
+        apply_event(&mut s, &mut t, 0, &stream_ev(true, "STARTED"));
+        apply_event(&mut s, &mut t, 500, &stream_ev(true, "RECONNECTING"));
+        apply_event(&mut s, &mut t, 9_000, &stream_ev(false, "STOPPED"));
+        assert_eq!(s.last_stop, Some(StreamStop { at_ms: 9_000, graceful: false }));
     }
 
     #[test]

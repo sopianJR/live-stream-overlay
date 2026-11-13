@@ -1,8 +1,17 @@
-import { Checklist, PHASE0_ITEMS, PHASE2_ITEMS, PHASE3_ITEMS } from "../Checklist";
+import { Checklist, PHASE0_ITEMS, PHASE2_ITEMS, PHASE3_ITEMS, PHASE4_ITEMS } from "../Checklist";
 
 export function TestingTab() {
   return (
     <div className="grid">
+      <section className="card wide">
+        <h2>Checklist Fase 4 · alert</h2>
+        <Checklist
+          storageKey="phase4-checklist"
+          items={PHASE4_ITEMS}
+          doneText="Fase 4 selesai, lanjut ke Fase 5 (balas chat)."
+        />
+      </section>
+
       <section className="card wide">
         <h2>Checklist Fase 3 · chat YouTube</h2>
         <Checklist

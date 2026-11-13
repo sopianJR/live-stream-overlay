@@ -1,4 +1,5 @@
 mod accelerator;
+mod alerts;
 mod commands;
 mod hotkeys;
 mod obs;
@@ -119,6 +120,7 @@ pub fn run() {
             overlay::create(app.handle(), loaded.overlay.monitor.as_deref())?;
             obs::init(app.handle());
             youtube::init(app.handle());
+            alerts::init(app.handle());
             hotkeys::init(app)?;
             hotkeys::apply(app.handle(), &loaded.hotkeys);
             build_tray(app)?;
@@ -161,6 +163,9 @@ pub fn run() {
             commands::obs_list_audio_inputs,
             commands::chat_get_snapshot,
             commands::chat_reconnect,
+            commands::alerts_get,
+            commands::alerts_dismiss,
+            commands::alerts_test,
             commands::app_quit,
         ])
         .run(tauri::generate_context!())

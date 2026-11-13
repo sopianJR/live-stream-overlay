@@ -39,6 +39,39 @@ export const PHASE0_ITEMS: ChecklistItem[] = [
   },
 ];
 
+export const PHASE4_ITEMS: ChecklistItem[] = [
+  {
+    id: "a",
+    title: "Posisi & tampilan alert",
+    how: "Dashboard → Alert → Tes alert. Atur posisi widget Alert di mode edit agar tidak menutupi HUD game.",
+  },
+  {
+    id: "b",
+    title: "Mic mute saat live",
+    how: "Mute mic selama live: pengingat muncul setelah ±10 detik dan diulang tiap 2 menit.",
+  },
+  {
+    id: "c",
+    title: "Internet bermasalah",
+    how: "Batasi upload / matikan Wi-Fi sebentar saat live: muncul alert frame drop atau \"OBS menyambung ulang\".",
+  },
+  {
+    id: "d",
+    title: "Stop disengaja tidak dianggap masalah",
+    how: "Stop stream dari aplikasi: tanpa alert. Stop dari OBS: hanya info singkat.",
+  },
+  {
+    id: "e",
+    title: "OBS ditutup saat live",
+    how: "Tutup OBS ketika live (mis. pakai server OBS tiruan): alert kritis \"Koneksi ke OBS putus\".",
+  },
+  {
+    id: "f",
+    title: "Riwayat di log",
+    how: "Setelah stream, buka file log: setiap alert tercatat dengan jam dan penjelasannya.",
+  },
+];
+
 export const PHASE3_ITEMS: ChecklistItem[] = [
   {
     id: "a",

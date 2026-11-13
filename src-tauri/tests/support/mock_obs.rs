@@ -33,11 +33,13 @@ pub struct MockConfig {
     pub drop_pct: f64,
     /// Cetak setiap request ke stdout.
     pub verbose: bool,
+    /// Input "Mic/Aux" mulai dalam keadaan mute.
+    pub mic_muted: bool,
 }
 
 impl Default for MockConfig {
     fn default() -> Self {
-        Self { password: None, live: false, bitrate_kbps: 6000, drop_pct: 0.0, verbose: false }
+        Self { password: None, live: false, bitrate_kbps: 6000, drop_pct: 0.0, verbose: false, mic_muted: false }
     }
 }
 
@@ -86,8 +88,9 @@ type Reply = Result<Value, (u16, String)>;
 impl World {
     fn new(config: MockConfig) -> Self {
         let live = config.live;
+        let mic_muted = config.mic_muted;
         let inputs = BTreeMap::from([
-            ("Mic/Aux".to_string(), ("wasapi_input_capture", false)),
+            ("Mic/Aux".to_string(), ("wasapi_input_capture", mic_muted)),
             ("Desktop Audio".to_string(), ("wasapi_output_capture", false)),
             ("Mic Podcast".to_string(), ("wasapi_input_capture", true)),
             ("Webcam".to_string(), ("dshow_input", false)),

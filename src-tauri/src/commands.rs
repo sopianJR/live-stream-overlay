@@ -2,6 +2,7 @@
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::alerts::{self, engine::Alert, AlertService};
 use crate::hotkeys::{self, HotkeyInfo, HotkeyRegistry};
 use crate::obs::{self, ObsService, ObsStatus};
 use crate::overlay::{self, MonitorInfo, OverlayManager, OverlayStatus};
@@ -182,6 +183,24 @@ pub fn chat_get_snapshot(chat: State<'_, ChatService>) -> ChatSnapshot {
 #[tauri::command]
 pub fn chat_reconnect(chat: State<'_, ChatService>) {
     chat.reconnect();
+}
+
+// ---------- Alert ----------
+
+#[tauri::command]
+pub fn alerts_get(alerts: State<'_, AlertService>) -> Vec<Alert> {
+    alerts.active()
+}
+
+#[tauri::command]
+pub fn alerts_dismiss(app: AppHandle, id: String) -> Vec<Alert> {
+    alerts::dismiss(&app, &id)
+}
+
+/// Menampilkan contoh alert selama 10 detik (untuk mengatur posisi widget).
+#[tauri::command]
+pub fn alerts_test(app: AppHandle) -> Vec<Alert> {
+    alerts::raise_test(&app)
 }
 
 // ---------- Aplikasi ----------
