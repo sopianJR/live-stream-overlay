@@ -59,6 +59,16 @@ pub enum ChatHealth {
     Problem(String),
 }
 
+/// Kesehatan koneksi Trakteer dari sudut pandang alert.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum TrakteerHealth {
+    /// Kunci tidak diisi: tidak ada alert.
+    #[default]
+    NotConfigured,
+    Connected,
+    Problem(String),
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
     pub t_ms: u64,
@@ -75,6 +85,7 @@ pub struct Snapshot {
     pub last_stop: Option<StreamStop>,
     pub app_stop_at_ms: Option<u64>,
     pub chat: ChatHealth,
+    pub trakteer: TrakteerHealth,
 }
 
 struct Content {
@@ -119,6 +130,8 @@ const MIC_MUTED: Spec =
     Spec { id: "micMuted", debounce_ms: 10_000, show_ms: 8_000, repeat_ms: Some(120_000), clear_ms: 0 };
 const CHAT_PROBLEM: Spec =
     Spec { id: "chatProblem", debounce_ms: 30_000, show_ms: 10_000, repeat_ms: Some(300_000), clear_ms: 0 };
+const TRAKTEER_LOST: Spec =
+    Spec { id: "trakteerLost", debounce_ms: 30_000, show_ms: 10_000, repeat_ms: Some(300_000), clear_ms: 0 };
 const CHAT_NOT_LIVE: Spec =
     Spec { id: "chatNotLive", debounce_ms: 60_000, show_ms: 10_000, repeat_ms: Some(300_000), clear_ms: 0 };
 
@@ -508,6 +521,16 @@ impl Engine {
         self.drive(CHAT_PROBLEM, t, chat_problem);
         self.drive(CHAT_NOT_LIVE, t, chat_not_live);
 
+        let trakteer = match &s.trakteer {
+            TrakteerHealth::Problem(msg) if live => Some(Content {
+                level: Level::Reminder,
+                title: "Koneksi Trakteer terputus".into(),
+                detail: Some(format!("Alert donasi tidak akan muncul. {msg}")),
+            }),
+            _ => None,
+        };
+        self.drive(TRAKTEER_LOST, t, trakteer);
+
         self.prev = Some(s.clone());
         self.finish(before)
     }
@@ -756,6 +779,19 @@ mod tests {
 
         let mut e = Engine::default();
         let offline = |t| Snapshot { live: false, chat: ChatHealth::Waiting, ..live(t) };
+        assert!(run(&mut e, 0, 120 * SEC, offline).is_empty());
+    }
+
+    #[test]
+    fn trakteer_reminder_only_while_live() {
+        let mut e = Engine::default();
+        let lost = |t| Snapshot { trakteer: TrakteerHealth::Problem("putus".into()), ..live(t) };
+        let raised = run(&mut e, 0, 31 * SEC, lost);
+        assert_eq!(raised.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["trakteerLost"]);
+        assert_eq!(raised[0].detail.as_deref(), Some("Alert donasi tidak akan muncul. putus"));
+
+        let mut e = Engine::default();
+        let offline = |t| Snapshot { live: false, trakteer: TrakteerHealth::Problem("putus".into()), ..live(t) };
         assert!(run(&mut e, 0, 120 * SEC, offline).is_empty());
     }
 

@@ -25,6 +25,7 @@ pub const DROPPED_PCT_RANGE: (f64, f64) = (0.1, 50.0);
 pub const LOW_BITRATE_PCT_RANGE: (u32, u32) = (10, 90);
 /// 0 = alert CPU dimatikan.
 pub const CPU_PCT_RANGE: (u32, u32) = (50, 100);
+pub const TRAKTEER_ALERT_SECONDS_RANGE: (u32, u32) = (3, 60);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -208,6 +209,33 @@ impl AlertSettings {
     }
 }
 
+/// Tampilan alert donasi Trakteer di overlay. Kuncinya ada di Credential Manager.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TrakteerSettings {
+    /// Lama satu kartu donasi tampil.
+    pub alert_seconds: u32,
+    /// Donasi di bawah nominal ini tidak ditampilkan. 0 = semua.
+    pub min_amount_rp: u64,
+    /// Tampilkan donasi test dari tombol "Test alert" di dashboard Trakteer.
+    pub show_test: bool,
+    /// Tampilkan pesan donatur di kartu.
+    pub show_message: bool,
+}
+
+impl Default for TrakteerSettings {
+    fn default() -> Self {
+        Self { alert_seconds: 8, min_amount_rp: 0, show_test: true, show_message: true }
+    }
+}
+
+impl TrakteerSettings {
+    fn sanitize(&mut self) {
+        let (min, max) = TRAKTEER_ALERT_SECONDS_RANGE;
+        self.alert_seconds = self.alert_seconds.clamp(min, max);
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
@@ -216,6 +244,7 @@ pub struct AppSettings {
     pub overlay: OverlaySettings,
     pub hotkeys: HotkeySettings,
     pub alerts: AlertSettings,
+    pub trakteer: TrakteerSettings,
 }
 
 impl AppSettings {
@@ -238,6 +267,7 @@ impl AppSettings {
         if let Err(e) = self.alerts.validate() {
             errors.extend(e);
         }
+        self.trakteer.sanitize();
         self.overlay.sanitize();
         if errors.is_empty() { Ok(self) } else { Err(errors) }
     }
@@ -258,6 +288,7 @@ impl AppSettings {
             log::warn!("ambang alert tidak konsisten, ambang kritis disamakan dengan peringatan");
             self.alerts.dropped_critical_pct = self.alerts.dropped_warn_pct;
         }
+        self.trakteer.sanitize();
         self.overlay.sanitize();
         self
     }
@@ -402,6 +433,17 @@ mod tests {
         s.youtube.source = "bukan sumber".into();
         let errors = s.validated().unwrap_err();
         assert!(errors[0].starts_with("Sumber chat:"), "{errors:?}");
+    }
+
+    #[test]
+    fn trakteer_settings() {
+        let s: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(s.trakteer, TrakteerSettings::default());
+        let mut s = AppSettings::default();
+        s.trakteer.alert_seconds = 1;
+        assert_eq!(s.clone().validated().unwrap().trakteer.alert_seconds, TRAKTEER_ALERT_SECONDS_RANGE.0);
+        s.trakteer.alert_seconds = 999;
+        assert_eq!(s.repaired().trakteer.alert_seconds, TRAKTEER_ALERT_SECONDS_RANGE.1);
     }
 
     #[test]

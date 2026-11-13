@@ -39,6 +39,39 @@ export const PHASE0_ITEMS: ChecklistItem[] = [
   },
 ];
 
+export const PHASE7_ITEMS: ChecklistItem[] = [
+  {
+    id: "a",
+    title: "Kunci Trakteer tersimpan & tersambung",
+    how: "Tab Koneksi → Trakteer: isi Stream Key (trv2-…) atau Channel ID. Status berubah \"Tersambung\".",
+  },
+  {
+    id: "b",
+    title: "Test alert dari Trakteer",
+    how: "Tekan \"Test alert\" di dashboard Trakteer: kartu bertanda TEST muncul di overlay.",
+  },
+  {
+    id: "c",
+    title: "Donasi asli tampil",
+    how: "Donasi masuk: kartu muncul berurutan (nama, nominal, pesan). Riwayat muncul di tab Koneksi.",
+  },
+  {
+    id: "d",
+    title: "Tidak terlihat di stream",
+    how: "Dengan Display Capture di OBS, kartu donasi tidak terlihat di preview.",
+  },
+  {
+    id: "e",
+    title: "Filter",
+    how: "Atur minimal nominal / matikan donasi test di tab Overlay: donasi di bawah batas tidak tampil.",
+  },
+  {
+    id: "f",
+    title: "Pulih saat internet putus",
+    how: "Putus internet sebentar: status \"mencoba ulang\", lalu tersambung lagi otomatis.",
+  },
+];
+
 export const PHASE5_ITEMS: ChecklistItem[] = [
   {
     id: "a",

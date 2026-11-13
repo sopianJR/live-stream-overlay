@@ -8,6 +8,7 @@ import { useSettings } from "../shared/useSettings";
 import { WidgetFrame } from "./WidgetFrame";
 import { AlertsWidget } from "./widgets/AlertsWidget";
 import { ChatWidget } from "./widgets/ChatWidget";
+import { TrakteerAlertWidget } from "./widgets/TrakteerAlertWidget";
 import { ObsStatusWidget } from "./widgets/ObsStatusWidget";
 
 function useViewport() {
@@ -123,6 +124,19 @@ export default function App() {
         onChange={updateWidget}
       >
         <AlertsWidget editMode={editMode} />
+      </WidgetFrame>
+
+      <WidgetFrame
+        id="trakteer"
+        title="Donasi Trakteer"
+        rect={layout.trakteer}
+        viewport={viewport}
+        editMode={editMode}
+        minWidth={240}
+        minHeight={80}
+        onChange={updateWidget}
+      >
+        <TrakteerAlertWidget editMode={editMode} settings={settings?.trakteer} />
       </WidgetFrame>
     </div>
   );

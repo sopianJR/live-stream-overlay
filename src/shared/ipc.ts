@@ -4,6 +4,10 @@ import type {
   AccountStatus,
   Alert,
   AppSettings,
+  DonationEvent,
+  TrakteerKeyStatus,
+  TrakteerSnapshot,
+  TrakteerStatus,
   ChatSnapshot,
   ChatStatus,
   ChatUpdate,
@@ -22,6 +26,9 @@ export const CHAT_STATUS_EVENT = "chat://status";
 export const CHAT_UPDATE_EVENT = "chat://update";
 export const ALERT_UPDATE_EVENT = "alert://update";
 export const ACCOUNT_STATUS_EVENT = "account://status";
+export const TRAKTEER_STATUS_EVENT = "trakteer://status";
+export const TRAKTEER_DONATION_EVENT = "trakteer://donation";
+export const TRAKTEER_RECENT_EVENT = "trakteer://recent";
 
 export const ipc = {
   // Overlay
@@ -78,6 +85,15 @@ export const ipc = {
   accountCancelLogin: () => invoke<void>("account_cancel_login"),
   accountLogout: () => invoke<AccountStatus>("account_logout"),
 
+  // Trakteer (kunci tidak pernah dikirim balik ke frontend)
+  trakteerGetState: () => invoke<TrakteerSnapshot>("trakteer_get_state"),
+  trakteerKeyStatus: () => invoke<TrakteerKeyStatus>("trakteer_key_status"),
+  trakteerSetKey: (key: string) => invoke<TrakteerKeyStatus>("trakteer_set_key", { key }),
+  trakteerClearKey: () => invoke<TrakteerKeyStatus>("trakteer_clear_key"),
+  trakteerReconnect: () => invoke<void>("trakteer_reconnect"),
+  /** Donasi contoh di overlay (tidak masuk riwayat). */
+  trakteerTestDonation: () => invoke<void>("trakteer_test_donation"),
+
   // Alert
   alertsGet: () => invoke<Alert[]>("alerts_get"),
   alertsDismiss: (id: string) => invoke<Alert[]>("alerts_dismiss", { id }),
@@ -115,6 +131,18 @@ export function onAlerts(cb: (alerts: Alert[]) => void): Promise<UnlistenFn> {
 
 export function onAccountStatus(cb: (status: AccountStatus) => void): Promise<UnlistenFn> {
   return listen<AccountStatus>(ACCOUNT_STATUS_EVENT, (e) => cb(e.payload));
+}
+
+export function onTrakteerStatus(cb: (status: TrakteerStatus) => void): Promise<UnlistenFn> {
+  return listen<TrakteerStatus>(TRAKTEER_STATUS_EVENT, (e) => cb(e.payload));
+}
+
+export function onTrakteerDonation(cb: (event: DonationEvent) => void): Promise<UnlistenFn> {
+  return listen<DonationEvent>(TRAKTEER_DONATION_EVENT, (e) => cb(e.payload));
+}
+
+export function onTrakteerRecent(cb: (recent: DonationEvent[]) => void): Promise<UnlistenFn> {
+  return listen<DonationEvent[]>(TRAKTEER_RECENT_EVENT, (e) => cb(e.payload));
 }
 
 export function onSettingsChanged(cb: (settings: AppSettings) => void): Promise<UnlistenFn> {

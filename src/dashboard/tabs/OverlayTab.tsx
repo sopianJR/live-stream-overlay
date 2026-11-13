@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { ipc } from "../../shared/ipc";
 import { LAYOUT_RESET_EVENT, resetLayout } from "../../shared/layout";
-import type { MonitorInfo, OverlaySettings } from "../../shared/types";
+import type { MonitorInfo, OverlaySettings, TrakteerSettings } from "../../shared/types";
 import { useOverlayStatus } from "../../shared/useOverlayStatus";
 import { Chip, FeedbackLine, useFeedback, type TabProps } from "../ui";
 
@@ -21,7 +21,102 @@ export function OverlayTab({ settings, save }: TabProps) {
       <StatusCard />
       <MonitorCard settings={settings} save={save} />
       <AppearanceCard settings={settings} save={save} />
+      <TrakteerAlertCard settings={settings} save={save} />
     </div>
+  );
+}
+
+const DONATION_SECONDS = [5, 8, 10, 15, 20, 30, 60];
+
+/** Tampilan kartu donasi Trakteer di overlay (koneksinya diatur di tab Koneksi). */
+function TrakteerAlertCard({ settings, save }: TabProps) {
+  const t = settings.trakteer;
+  const [minAmount, setMinAmount] = useState(String(t.minAmountRp));
+  const { feedback, busy, run } = useFeedback();
+
+  useEffect(() => setMinAmount(String(t.minAmountRp)), [t.minAmountRp]);
+
+  const update = (patch: Partial<TrakteerSettings>, ok?: string) =>
+    run(() => save((s) => ({ ...s, trakteer: { ...s.trakteer, ...patch } })), ok);
+
+  const commitMin = () => {
+    const n = Number(minAmount.replace(/\D/g, "") || "0");
+    if (n !== t.minAmountRp) {
+      void update({ minAmountRp: n }, n ? `Hanya donasi ≥ Rp ${n.toLocaleString("id-ID")} yang tampil.` : "Semua donasi tampil.");
+    }
+  };
+
+  const seconds = DONATION_SECONDS.includes(t.alertSeconds)
+    ? DONATION_SECONDS
+    : [...DONATION_SECONDS, t.alertSeconds].sort((a, b) => a - b);
+
+  return (
+    <section className="card">
+      <h2>Alert donasi Trakteer</h2>
+      <p className="muted">
+        Kartu donasi tampil satu per satu di widget "Donasi Trakteer". Hubungkan akun Trakteer di
+        tab Koneksi.
+      </p>
+      <div className="field-row">
+        <label className="field grow">
+          <span>Lama tampil per donasi</span>
+          <select
+            value={t.alertSeconds}
+            disabled={busy}
+            onChange={(e) => void update({ alertSeconds: Number(e.target.value) })}
+          >
+            {seconds.map((s) => (
+              <option key={s} value={s}>
+                {s} detik
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field grow">
+          <span>Minimal nominal (Rp, 0 = semua)</span>
+          <input
+            value={minAmount}
+            inputMode="numeric"
+            onChange={(e) => setMinAmount(e.target.value.replace(/\D/g, ""))}
+            onBlur={commitMin}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitMin();
+            }}
+          />
+        </label>
+      </div>
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={t.showMessage}
+          disabled={busy}
+          onChange={(e) => void update({ showMessage: e.target.checked })}
+        />
+        <span>Tampilkan pesan donatur</span>
+      </label>
+      <label className="toggle top-gap">
+        <input
+          type="checkbox"
+          checked={t.showTest}
+          disabled={busy}
+          onChange={(e) => void update({ showTest: e.target.checked })}
+        />
+        <span>
+          Tampilkan donasi test
+          <small>Dari tombol "Test alert" di dashboard Trakteer.</small>
+        </span>
+      </label>
+      <div className="actions top-gap">
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() => void run(ipc.trakteerTestDonation, "Contoh donasi dikirim ke overlay.")}
+        >
+          Tes donasi
+        </button>
+      </div>
+      <FeedbackLine feedback={feedback} />
+    </section>
   );
 }
 

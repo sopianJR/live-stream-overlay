@@ -14,6 +14,8 @@ export const DEFAULT_LAYOUT: Layout = {
   chat: { x: 0.75, y: 0.5, w: 0.235, h: 0.45 },
   // Alert di tengah atas, mudah terlihat tapi tidak menutupi tengah layar.
   alerts: { x: 0.33, y: 0.09, w: 0.34, h: 0.2 },
+  // Donasi Trakteer di kanan atas, di atas panel chat.
+  trakteer: { x: 0.75, y: 0.12, w: 0.235, h: 0.22 },
 };
 
 let storePromise: Promise<Store> | null = null;

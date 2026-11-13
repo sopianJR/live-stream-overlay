@@ -6,6 +6,7 @@ mod obs;
 mod overlay;
 mod secrets;
 mod settings;
+mod trakteer;
 /// Publik agar bisa dipakai `examples/yt_chat.rs`.
 pub mod youtube;
 
@@ -123,6 +124,7 @@ pub fn run() {
             obs::init(app.handle());
             youtube::init(app.handle());
             youtube::account::init(app.handle());
+            trakteer::init(app.handle());
             alerts::init(app.handle());
             hotkeys::init(app)?;
             hotkeys::apply(app.handle(), &loaded.hotkeys);
@@ -173,6 +175,12 @@ pub fn run() {
             commands::account_login,
             commands::account_cancel_login,
             commands::account_logout,
+            commands::trakteer_get_state,
+            commands::trakteer_key_status,
+            commands::trakteer_set_key,
+            commands::trakteer_clear_key,
+            commands::trakteer_reconnect,
+            commands::trakteer_test_donation,
             commands::alerts_get,
             commands::alerts_dismiss,
             commands::alerts_test,

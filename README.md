@@ -7,7 +7,7 @@ tertangkap di stream.
 Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka panjang
 (OBS, chat, alert) berjalan di Rust, sedangkan React hanya menampilkan state.
 
-> Status: **Fase 6, prototype lengkap.** Semua fitur rencana sudah ada dan tersedia installer Windows (NSIS).
+> Status: **Fase 7, alert donasi Trakteer digabung** dari trakteer-live-suite. Installer Windows (NSIS) tersedia.
 > Yang tersisa: uji langsung saat live sungguhan (checklist di dashboard → Pengujian).
 
 ## Fitur saat ini
@@ -36,6 +36,14 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - **pengingat**: mic mute saat live (tiap 2 menit), chat YouTube bermasalah atau live belum terdeteksi
   - stop yang disengaja (dari aplikasi atau tombol Stop di OBS) tidak dianggap masalah
   - debounce agar lonjakan sesaat tidak memicu alert; semua alert tercatat di log
+- **Alert donasi Trakteer** (digabung dari trakteer-live-suite):
+  - tersambung realtime ke Trakteer: Stream Key V2 (`trv2-…`) atau Channel ID V1 (Pusher)
+  - setiap donasi tampil sebagai kartu di widget "Donasi Trakteer" (nama, unit × jumlah,
+    nominal, pesan), satu per satu berurutan; badge TEST untuk donasi test dari dashboard Trakteer
+  - hanya terlihat oleh streamer (overlay tersembunyi dari capture), tanpa suara
+  - filter minimal nominal, tampilkan/sembunyikan donasi test dan pesan, durasi tampil
+  - sambung ulang otomatis (1,5 detik ×1,6, maks. 10 detik); pengingat jika terputus saat live
+  - kunci disimpan di Windows Credential Manager; log hanya mencatat nominal
 - **Balas chat dari overlay** (opsional, butuh login Google):
   - kotak balas di bawah chat saat mode edit; klik nama penonton untuk menyebut `@nama`
   - login OAuth di browser (PKCE, redirect ke `127.0.0.1`), hanya scope `youtube.force-ssl`
@@ -46,7 +54,7 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - **Mulai:** panduan awal yang tercentang sendiri saat OBS & chat sudah tersambung
   - **Overlay:** status, pilih monitor, kepekatan latar, ukuran huruf, durasi pudar chat
   - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat
-    YouTube, login Google untuk membalas chat (dengan panduan Google Cloud)
+    YouTube, kunci Trakteer + riwayat donasi, login Google untuk membalas chat
   - **Alert:** alert aktif, ambang (frame drop, bitrate, CPU, pengingat mic), tombol *Tes alert*
   - **Hotkey:** ubah kombinasi tombol (direkam langsung, wajib pakai modifier)
   - **Pengujian:** checklist Fase 5 (balas chat), 4 (alert), 3 (chat), 2 (OBS), dan 0 (overlay)
@@ -62,6 +70,7 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
 | Password OBS | Windows Credential Manager, target `LiveStreamOverlay/obs-websocket` |
 | OAuth client Google | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-client` |
 | Login Google (refresh token) | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-token` |
+| Kunci Trakteer | Windows Credential Manager, target `LiveStreamOverlay/trakteer-key` |
 | Log | `%LOCALAPPDATA%\com.livestreamapps.overlay\logs\` |
 
 ## Instal (pengguna)
@@ -144,6 +153,18 @@ cd src-tauri && cargo run --example yt_chat -- @namachannel 60
 Menampilkan judul live, jumlah penonton, riwayat chat, lalu pesan baru selama 60 detik. Berguna
 untuk memastikan chat sebuah live bisa dibaca tanpa membuka aplikasi.
 
+### Mencoba alert donasi tanpa donasi asli
+
+Server realtime Trakteer tiruan mengirim donasi rekaan berkala:
+
+```bash
+cd src-tauri && cargo run --example mock_trakteer -- --every 8
+```
+
+Jalankan aplikasi (build debug) dengan `LSO_TRAKTEER_URL=ws://127.0.0.1:4470`, lalu isi kunci uji
+di dashboard → Koneksi → Trakteer, mis. `trv2-uji` (V2) atau `a2FuYWwtdWpp` (V1). Hapus kuncinya
+setelah selesai. Tombol **Tes donasi** (tab Overlay) menampilkan contoh kartu tanpa koneksi apa pun.
+
 ### Mencoba tanpa OBS
 
 Server obs-websocket tiruan bisa dijalankan sendiri, mis. untuk melihat overlay dalam keadaan live:
@@ -169,6 +190,15 @@ Membaca chat tidak perlu login. Untuk membalas dari overlay, buat OAuth client s
 5. Salin Client ID & Client secret ke dashboard → Koneksi → *Balas chat*, lalu **Login dengan Google**.
 
 Selama consent screen masih mode *Testing*, login berlaku 7 hari lalu perlu login ulang.
+
+## Checklist Fase 7 (alert donasi Trakteer)
+
+1. **(a)** Tab Koneksi → Trakteer: isi Stream Key (`trv2-…`) atau Channel ID → "Tersambung".
+2. **(b)** "Test alert" di dashboard Trakteer → kartu bertanda TEST muncul di overlay.
+3. **(c)** Donasi asli → kartu berurutan; riwayat muncul di tab Koneksi.
+4. **(d)** Display Capture di OBS → kartu donasi tidak terlihat di preview.
+5. **(e)** Minimal nominal / donasi test dimatikan → donasi di bawah batas tidak tampil.
+6. **(f)** Internet putus sebentar → "mencoba ulang", lalu tersambung lagi otomatis.
 
 ## Checklist Fase 5 (balas chat)
 
@@ -237,6 +267,7 @@ src-tauri/src/
                   klien InnerTube (innertube.rs), penguraian JSON (parse.rs), buffer pesan (buffer.rs),
                   login Google (oauth.rs), YouTube Data API (api.rs), akun & kirim pesan (account.rs)
   alerts/         alert: servis 1 Hz (mod.rs), aturan murni + test linimasa (engine.rs)
+  trakteer/       alert donasi: koneksi V1/V2 + reconnect (mod.rs), parser protokol murni (protocol.rs)
   settings.rs     struktur & validasi pengaturan, simpan/muat
   accelerator.rs  parser & normalisasi teks hotkey
   hotkeys.rs      hotkey global yang bisa diubah (+ jeda saat direkam)
@@ -248,6 +279,7 @@ src-tauri/examples/mock_obs.rs        `cargo run --example mock_obs`
 src-tauri/examples/yt_chat.rs         `cargo run --example yt_chat -- @handle`
 src-tauri/tests/fixtures/youtube/     contoh respons InnerTube (data rekaan) untuk test parser
 src-tauri/tests/support/mock_http.rs  server HTTP tiruan (Google OAuth & Data API) untuk test
+src-tauri/tests/support/mock_trakteer.rs + examples/mock_trakteer.rs  server Trakteer tiruan
 ```
 
 ## Rencana berikutnya
@@ -258,3 +290,5 @@ src-tauri/tests/support/mock_http.rs  server HTTP tiruan (Google OAuth & Data AP
 - ~~**Fase 4:** alert masalah stream~~ selesai
 - ~~**Fase 5:** balas chat (OAuth + YouTube Data API)~~ selesai
 - ~~**Fase 6:** polishing & installer~~ selesai (uji live sungguhan menunggu user)
+- ~~**Fase 7:** alert donasi Trakteer (gabung dari trakteer-live-suite)~~ selesai
+- **Berikutnya:** command engine donasi → keyboard/mouse dari trakteer-live-suite

@@ -8,6 +8,7 @@ use crate::obs::{self, ObsService, ObsStatus};
 use crate::overlay::{self, MonitorInfo, OverlayManager, OverlayStatus};
 use crate::secrets;
 use crate::settings::{self, AppSettings, SettingsState};
+use crate::trakteer::{self, KeyStatus, TrakteerService, TrakteerSnapshot};
 use crate::youtube::account::{self, AccountService, AccountStatus};
 use crate::youtube::{ChatService, ChatSnapshot};
 
@@ -227,6 +228,40 @@ pub fn account_cancel_login(app: AppHandle) {
 #[tauri::command]
 pub async fn account_logout(app: AppHandle) -> Result<AccountStatus, String> {
     account::logout(&app).await
+}
+
+// ---------- Trakteer ----------
+
+#[tauri::command]
+pub fn trakteer_get_state(trakteer: State<'_, TrakteerService>) -> TrakteerSnapshot {
+    trakteer.snapshot()
+}
+
+/// Hanya memberi tahu apakah kunci ada (dan versinya); kuncinya sendiri tidak dikirim.
+#[tauri::command]
+pub fn trakteer_key_status() -> KeyStatus {
+    trakteer::key_status()
+}
+
+#[tauri::command]
+pub fn trakteer_set_key(app: AppHandle, key: String) -> Result<KeyStatus, String> {
+    trakteer::set_key(&app, &key)
+}
+
+#[tauri::command]
+pub fn trakteer_clear_key(app: AppHandle) -> Result<KeyStatus, String> {
+    trakteer::clear_key(&app)
+}
+
+#[tauri::command]
+pub fn trakteer_reconnect(trakteer: State<'_, TrakteerService>) {
+    trakteer.reconnect();
+}
+
+/// Donasi contoh di overlay (tidak masuk riwayat), untuk mengatur posisi widget.
+#[tauri::command]
+pub fn trakteer_test_donation(app: AppHandle) {
+    trakteer::emit_sample(&app);
 }
 
 // ---------- Alert ----------

@@ -1,5 +1,5 @@
 // Cermin tipe Rust (src-tauri/src/{overlay,hotkeys,settings}.rs, obs/status.rs, youtube/*.rs,
-// alerts/engine.rs).
+// alerts/engine.rs, trakteer/*.rs).
 
 export interface OverlayStatus {
   visible: boolean;
@@ -65,15 +65,25 @@ export interface AlertSettings {
   micReminder: boolean;
 }
 
+export interface TrakteerSettings {
+  /** Lama satu kartu donasi tampil (3–60 detik). */
+  alertSeconds: number;
+  /** 0 = semua donasi ditampilkan. */
+  minAmountRp: number;
+  showTest: boolean;
+  showMessage: boolean;
+}
+
 export interface AppSettings {
   obs: ObsSettings;
   youtube: YoutubeSettings;
   overlay: OverlaySettings;
   hotkeys: HotkeySettings;
   alerts: AlertSettings;
+  trakteer: TrakteerSettings;
 }
 
-export type WidgetId = "obsStatus" | "chat" | "alerts";
+export type WidgetId = "obsStatus" | "chat" | "alerts" | "trakteer";
 
 /** Posisi & ukuran widget dalam pecahan viewport (0..1), agar tidak bergantung resolusi. */
 export interface WidgetRect {
@@ -236,4 +246,48 @@ export interface AccountStatus {
   state: AccountState;
   channelTitle: string | null;
   message: string | null;
+}
+
+// ---------- Trakteer ----------
+
+export type TrakteerState = "idle" | "connecting" | "connected" | "retrying" | "failed";
+export type TrakteerProtocol = "V1" | "V2";
+
+export interface TrakteerStatus {
+  state: TrakteerState;
+  message: string | null;
+  protocol: TrakteerProtocol | null;
+  attempt: number;
+}
+
+export interface TrakteerDonation {
+  supporterName: string;
+  unit: string;
+  quantity: number;
+  amountRp: number;
+  /** mis. "Rp 5.000" */
+  priceText: string;
+  message: string;
+  avatarUrl: string;
+  unitIconUrl: string | null;
+}
+
+/** live = donasi asli, test = "Test alert" dari dashboard Trakteer, sample = contoh lokal. */
+export type DonationKind = "live" | "test" | "sample";
+
+export interface DonationEvent {
+  id: string;
+  kind: DonationKind;
+  donation: TrakteerDonation;
+  receivedAtMs: number;
+}
+
+export interface TrakteerSnapshot {
+  status: TrakteerStatus;
+  recent: DonationEvent[];
+}
+
+export interface TrakteerKeyStatus {
+  hasKey: boolean;
+  protocol: TrakteerProtocol | null;
 }

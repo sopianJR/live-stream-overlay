@@ -4,6 +4,7 @@ import { ipc } from "../../shared/ipc";
 import { useAccount } from "../../shared/useAccount";
 import { useChatStatus } from "../../shared/useChat";
 import { useObsStatus } from "../../shared/useObsStatus";
+import { useTrakteer } from "../../shared/useTrakteer";
 import type { TabProps } from "../ui";
 
 export const ONBOARDING_DONE_KEY = "onboarding-done";
@@ -61,6 +62,7 @@ export function StartTab({ settings, goTo, onFinish }: Props) {
   const obs = useObsStatus();
   const chat = useChatStatus();
   const account = useAccount();
+  const trakteer = useTrakteer().status;
   const [manual, setManual] = useState(readManual);
 
   const tick = (key: ManualStep, value: boolean) =>
@@ -180,6 +182,22 @@ export function StartTab({ settings, goTo, onFinish }: Props) {
 
           <Step
             n={6}
+            optional
+            done={trakteer?.state === "connected"}
+            title="Hubungkan Trakteer untuk alert donasi"
+            status={trakteer?.state === "connected" ? `Trakteer tersambung (${trakteer.protocol}).` : trakteer?.message}
+          >
+            <p>
+              Isi Stream Key / Channel ID dari pengaturan widget Alert di dashboard Trakteer. Donasi
+              tampil sebagai kartu di overlay, hanya terlihat oleh Anda.
+            </p>
+            <button className="secondary small" onClick={() => goTo("connection")}>
+              Buka tab Koneksi
+            </button>
+          </Step>
+
+          <Step
+            n={7}
             optional
             done={account?.state === "signedIn"}
             title="Balas chat dari overlay"

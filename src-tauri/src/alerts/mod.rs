@@ -11,8 +11,9 @@ use tokio::time::MissedTickBehavior;
 
 use crate::obs::ObsService;
 use crate::settings::SettingsState;
+use crate::trakteer::{TrakteerService, TrakteerState};
 use crate::youtube::{ChatService, ChatState};
-use engine::{Alert, ChatHealth, Engine, Snapshot, Tick};
+use engine::{Alert, ChatHealth, Engine, Snapshot, Tick, TrakteerHealth};
 
 pub const UPDATE_EVENT: &str = "alert://update";
 const INTERVAL: Duration = Duration::from_secs(1);
@@ -43,6 +44,14 @@ fn snapshot(app: &AppHandle) -> Snapshot {
     let obs_service = app.state::<ObsService>();
     let obs = obs_service.status();
     let chat = app.state::<ChatService>().status();
+    let trakteer = app.state::<TrakteerService>().status();
+    let trakteer = match trakteer.state {
+        TrakteerState::Idle => TrakteerHealth::NotConfigured,
+        TrakteerState::Connected => TrakteerHealth::Connected,
+        TrakteerState::Connecting | TrakteerState::Retrying | TrakteerState::Failed => {
+            TrakteerHealth::Problem(trakteer.message.unwrap_or_default())
+        }
+    };
     let perf = obs.perf.as_ref();
     let chat = match chat.state {
         ChatState::Idle => ChatHealth::NotConfigured,
@@ -67,6 +76,7 @@ fn snapshot(app: &AppHandle) -> Snapshot {
         last_stop: obs.last_stop,
         app_stop_at_ms: obs.app_stop_at_ms,
         chat,
+        trakteer,
     }
 }
 

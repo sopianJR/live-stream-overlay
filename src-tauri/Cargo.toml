@@ -29,6 +29,8 @@ time = "0.3"
 # InnerTube (chat YouTube). TLS bawaan Windows (SChannel) agar tidak butuh toolchain tambahan.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "gzip", "json", "form", "query", "system-proxy"] }
 url = "2"
+# WebSocket Trakteer (sama dengan yang dipakai obws, ditambah TLS bawaan Windows).
+tokio-websockets = { version = "0.13", features = ["client", "native-tls", "fastrand", "sha1_smol"] }
 # Login Google (OAuth PKCE) untuk membalas chat.
 tauri-plugin-opener = "2"
 getrandom = "0.3"

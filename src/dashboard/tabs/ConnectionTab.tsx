@@ -12,12 +12,14 @@ import { useChatStatus } from "../../shared/useChat";
 import { useObsStatus } from "../../shared/useObsStatus";
 import { FeedbackLine, useFeedback, type TabProps } from "../ui";
 import { GoogleAccountCard } from "./GoogleAccountCard";
+import { TrakteerCard } from "./TrakteerCard";
 
 export function ConnectionTab({ settings, save }: TabProps) {
   return (
     <div className="grid">
       <ObsCard settings={settings} save={save} />
       <YoutubeCard settings={settings} save={save} />
+      <TrakteerCard />
       <GoogleAccountCard />
     </div>
   );
