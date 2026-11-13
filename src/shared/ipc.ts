@@ -85,6 +85,8 @@ export const ipc = {
   alertsTest: () => invoke<Alert[]>("alerts_test"),
 
   appQuit: () => invoke<void>("app_quit"),
+  /** Membuka folder log di File Explorer. */
+  appOpenLogFolder: () => invoke<void>("app_open_log_folder"),
 };
 
 export function onOverlayStatus(cb: (status: OverlayStatus) => void): Promise<UnlistenFn> {

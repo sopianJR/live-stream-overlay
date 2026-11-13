@@ -177,6 +177,7 @@ pub fn run() {
             commands::alerts_dismiss,
             commands::alerts_test,
             commands::app_quit,
+            commands::app_open_log_folder,
         ])
         .run(tauri::generate_context!())
         .expect("gagal menjalankan aplikasi");

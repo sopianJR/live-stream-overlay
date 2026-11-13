@@ -7,7 +7,8 @@ tertangkap di stream.
 Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka panjang
 (OBS, chat, alert) berjalan di Rust, sedangkan React hanya menampilkan state.
 
-> Status: **Fase 5, balas chat selesai.** Status OBS, live chat YouTube, alert, dan balas chat sudah asli.
+> Status: **Fase 6, prototype lengkap.** Semua fitur rencana sudah ada dan tersedia installer Windows (NSIS).
+> Yang tersisa: uji langsung saat live sungguhan (checklist di dashboard → Pengujian).
 
 ## Fitur saat ini
 
@@ -42,6 +43,7 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
     (50 unit kuota/pesan, ±190 pesan/hari dengan kuota gratis)
   - OAuth client dan refresh token disimpan di Windows Credential Manager
 - Dashboard bertab:
+  - **Mulai:** panduan awal yang tercentang sendiri saat OBS & chat sudah tersambung
   - **Overlay:** status, pilih monitor, kepekatan latar, ukuran huruf, durasi pudar chat
   - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat
     YouTube, login Google untuk membalas chat (dengan panduan Google Cloud)
@@ -49,6 +51,7 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - **Hotkey:** ubah kombinasi tombol (direkam langsung, wajib pakai modifier)
   - **Pengujian:** checklist Fase 5 (balas chat), 4 (alert), 3 (chat), 2 (OBS), dan 0 (overlay)
 - System tray, single-instance, dashboard dihancurkan saat ditutup (hemat RAM)
+- Tombol **Buka folder log** di dashboard untuk meninjau riwayat koneksi & alert setelah stream
 
 ## Data & log
 
@@ -61,7 +64,20 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
 | Login Google (refresh token) | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-token` |
 | Log | `%LOCALAPPDATA%\com.livestreamapps.overlay\logs\` |
 
-## Prasyarat
+## Instal (pengguna)
+
+1. Jalankan `LiveStream Overlay_<versi>_x64-setup.exe` (dari `src-tauri/target/release/bundle/nsis/`).
+   Instalasi per pengguna, tidak butuh hak administrator. WebView2 sudah bawaan Windows 11.
+2. Buka **LiveStream Overlay** dari Start Menu. Dashboard terbuka di tab **Mulai**; ikuti langkahnya.
+3. Menutup dashboard tidak mematikan aplikasi: overlay tetap berjalan, buka lagi lewat ikon tray.
+
+Ukuran & beban (build release, dashboard tertutup, tersambung ke OBS): installer 1,8 MB,
+RAM ±108 MB (kolom *Memory* Task Manager, termasuk WebView2), CPU idle ±0,04%.
+
+Uninstall lewat *Settings → Apps*. Pengaturan (`%APPDATA%`), log (`%LOCALAPPDATA%`), dan rahasia
+di Credential Manager tidak ikut terhapus; hapus manual jika perlu.
+
+## Prasyarat (pengembangan)
 
 - Windows 10 versi 2004 atau lebih baru (wajib untuk fitur "tersembunyi dari capture")
 - Node.js 20+
@@ -81,6 +97,9 @@ Build installer (NSIS):
 ```bash
 npm run tauri build
 ```
+
+Hasil: `src-tauri/target/release/bundle/nsis/LiveStream Overlay_<versi>_x64-setup.exe`. Build pertama
+mengunduh perangkat NSIS milik Tauri secara otomatis.
 
 Saat aplikasi berjalan, overlay langsung tampil dalam **mode pasif** dan dashboard terbuka.
 Menutup dashboard tidak mematikan aplikasi; aplikasi tetap berjalan di system tray.
@@ -238,4 +257,4 @@ src-tauri/tests/support/mock_http.rs  server HTTP tiruan (Google OAuth & Data AP
 - ~~**Fase 3:** chat YouTube via InnerTube + jumlah penonton~~ selesai
 - ~~**Fase 4:** alert masalah stream~~ selesai
 - ~~**Fase 5:** balas chat (OAuth + YouTube Data API)~~ selesai
-- **Fase 6:** polishing & installer
+- ~~**Fase 6:** polishing & installer~~ selesai (uji live sungguhan menunggu user)

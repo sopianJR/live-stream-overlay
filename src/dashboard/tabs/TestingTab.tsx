@@ -6,8 +6,9 @@ import {
   PHASE4_ITEMS,
   PHASE5_ITEMS,
 } from "../Checklist";
+import type { AppSettings } from "../../shared/types";
 
-export function TestingTab() {
+export function TestingTab({ settings }: { settings: AppSettings }) {
   return (
     <div className="grid">
       <section className="card wide">
@@ -64,7 +65,7 @@ export function TestingTab() {
           </li>
           <li>
             Untuk mengukur dampak FPS, bandingkan FPS game dengan overlay tampil vs tersembunyi
-            (<kbd>Ctrl+Shift+O</kbd>), lalu dengan aplikasi ditutup sepenuhnya.
+            (<kbd>{settings.hotkeys.toggleOverlay}</kbd>), lalu dengan aplikasi ditutup sepenuhnya.
           </li>
           <li>
             Mau mencoba tanpa membuka OBS? Jalankan server OBS tiruan dari folder{" "}

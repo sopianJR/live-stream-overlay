@@ -253,3 +253,14 @@ pub fn alerts_test(app: AppHandle) -> Vec<Alert> {
 pub fn app_quit(app: AppHandle) {
     app.exit(0);
 }
+
+/// Membuka folder log (riwayat koneksi & alert) di File Explorer.
+#[tauri::command]
+pub fn app_open_log_folder(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = app.path().app_log_dir().map_err(|e| format!("Folder log tidak ditemukan: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Gagal membuat folder log: {e}"))?;
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| format!("Gagal membuka folder log: {e}"))
+}

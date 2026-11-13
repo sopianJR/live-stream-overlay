@@ -7,14 +7,14 @@ import { FeedbackLine, useFeedback, type TabProps } from "../ui";
 export function AlertTab({ settings, save }: TabProps) {
   return (
     <div className="grid">
-      <ActiveAlertsCard />
+      <ActiveAlertsCard editHotkey={settings.hotkeys.toggleEdit} />
       <AlertSettingsCard settings={settings} save={save} />
       <RulesCard />
     </div>
   );
 }
 
-function ActiveAlertsCard() {
+function ActiveAlertsCard({ editHotkey }: { editHotkey: string }) {
   const alerts = useAlerts();
   const { feedback, busy, run } = useFeedback();
 
@@ -53,7 +53,7 @@ function ActiveAlertsCard() {
       <FeedbackLine feedback={feedback} />
       <small className="muted">
         Contoh alert berguna untuk mengatur posisi widget Alert di mode edit (
-        <kbd>{"Ctrl+Shift+E"}</kbd>). Semua alert juga tercatat di file log.
+        <kbd>{editHotkey}</kbd>). Semua alert juga tercatat di file log.
       </small>
     </section>
   );

@@ -76,7 +76,7 @@ export default function App() {
           <div className="edit-backdrop" />
           <div className="edit-hint">
             <strong>MODE EDIT</strong> · seret &amp; ubah ukuran widget · <kbd>Esc</kbd> atau{" "}
-            <kbd>Ctrl+Shift+E</kbd> untuk kembali ke game
+            <kbd>{settings?.hotkeys.toggleEdit ?? "hotkey mode edit"}</kbd> untuk kembali ke game
             <span className={status?.contentProtected ? "hint-chip ok" : "hint-chip warn"}>
               {status?.contentProtected
                 ? "Tersembunyi dari capture"
