@@ -1,8 +1,13 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { CHAT_STATE_LABEL, formatViewers } from "../../shared/format";
 import { ipc } from "../../shared/ipc";
 import type { ChatAuthor, ChatMessage, ChatRun, ChatStatus } from "../../shared/types";
+import { useAccount } from "../../shared/useAccount";
 import { useChat } from "../../shared/useChat";
+import { ReplyBox } from "./ReplyBox";
+
+/** Klik nama penonton (mode edit) untuk menyebutnya di balasan. */
+type Mention = ((name: string) => void) | undefined;
 
 /** Pesan yang dirender; buffer menyimpan lebih banyak untuk dibuka ulang. */
 const RENDER_LIMIT = 50;
@@ -28,9 +33,14 @@ function roleClass(a: ChatAuthor): string {
   return "";
 }
 
-function AuthorName({ author }: { author: ChatAuthor }) {
+function AuthorName({ author, onMention }: { author: ChatAuthor; onMention?: Mention }) {
+  const clickable = onMention && author.name;
   return (
-    <span className={`chat-author ${roleClass(author)}`}>
+    <span
+      className={`chat-author ${roleClass(author)}${clickable ? " mentionable no-drag" : ""}`}
+      title={clickable ? "Klik untuk menyebut di balasan" : undefined}
+      onClick={clickable ? () => onMention(author.name) : undefined}
+    >
       {author.moderator && (
         <span className="badge" title="Moderator">
           🔧
@@ -60,7 +70,7 @@ function AuthorName({ author }: { author: ChatAuthor }) {
   );
 }
 
-function ChatItem({ m }: { m: ChatMessage }) {
+function ChatItem({ m, onMention }: { m: ChatMessage; onMention?: Mention }) {
   switch (m.kind) {
     case "superChat":
     case "superSticker": {
@@ -73,7 +83,7 @@ function ChatItem({ m }: { m: ChatMessage }) {
       return (
         <div className="chat-msg super" style={body}>
           <div className="super-head" style={head}>
-            <AuthorName author={m.author} />
+            <AuthorName author={m.author} onMention={onMention} />
             <span className="super-amount">{m.amount}</span>
           </div>
           {m.kind === "superSticker" && m.sticker ? (
@@ -94,7 +104,7 @@ function ChatItem({ m }: { m: ChatMessage }) {
       return (
         <div className="chat-msg member-event">
           <div className="member-head">
-            <AuthorName author={m.author} />
+            <AuthorName author={m.author} onMention={onMention} />
             {m.header && <span className="member-title">{m.header}</span>}
           </div>
           {m.runs.length > 0 && (
@@ -107,13 +117,13 @@ function ChatItem({ m }: { m: ChatMessage }) {
     case "giftPurchase":
       return (
         <div className="chat-msg gift">
-          🎁 <AuthorName author={m.author} /> <span className="chat-text">{m.header}</span>
+          🎁 <AuthorName author={m.author} onMention={onMention} /> <span className="chat-text">{m.header}</span>
         </div>
       );
     case "giftRedemption":
       return (
         <div className="chat-msg gift small">
-          🎁 <AuthorName author={m.author} />{" "}
+          🎁 <AuthorName author={m.author} onMention={onMention} />{" "}
           <span className="chat-text">
             <Runs runs={m.runs} />
           </span>
@@ -122,7 +132,7 @@ function ChatItem({ m }: { m: ChatMessage }) {
     default:
       return (
         <div className={m.author.owner ? "chat-msg owner" : "chat-msg"}>
-          <AuthorName author={m.author} />{" "}
+          <AuthorName author={m.author} onMention={onMention} />{" "}
           <span className="chat-text">
             <Runs runs={m.runs} />
           </span>
@@ -164,7 +174,13 @@ function StatusLine({ status, editMode }: { status: ChatStatus; editMode: boolea
 
 export function ChatWidget({ editMode }: { editMode: boolean }) {
   const { status, messages } = useChat();
+  const account = useAccount();
   const listRef = useRef<HTMLDivElement>(null);
+  const [mention, setMention] = useState<{ text: string; seq: number } | null>(null);
+  const onMention = useCallback(
+    (name: string) => setMention((prev) => ({ text: `${name} `, seq: (prev?.seq ?? 0) + 1 })),
+    [],
+  );
   const shown = messages.length > RENDER_LIMIT ? messages.slice(-RENDER_LIMIT) : messages;
 
   // Selalu ikuti pesan terbaru (di mode edit chat bisa di-scroll).
@@ -178,9 +194,10 @@ export function ChatWidget({ editMode }: { editMode: boolean }) {
       {status && <StatusLine status={status} editMode={editMode} />}
       <div className="chat" ref={listRef}>
         {shown.map((m) => (
-          <ChatItem key={m.id} m={m} />
+          <ChatItem key={m.id} m={m} onMention={editMode ? onMention : undefined} />
         ))}
       </div>
+      {editMode && status?.state === "connected" && <ReplyBox account={account} mention={mention} />}
     </div>
   );
 }

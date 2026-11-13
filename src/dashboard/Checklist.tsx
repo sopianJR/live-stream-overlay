@@ -39,6 +39,39 @@ export const PHASE0_ITEMS: ChecklistItem[] = [
   },
 ];
 
+export const PHASE5_ITEMS: ChecklistItem[] = [
+  {
+    id: "a",
+    title: "OAuth client tersimpan",
+    how: "Ikuti langkah di tab Koneksi → Balas chat, lalu simpan Client ID & secret.",
+  },
+  {
+    id: "b",
+    title: "Login Google berhasil",
+    how: "Klik Login dengan Google, pilih akun channel Anda, izinkan. Status berubah \"Login sebagai …\".",
+  },
+  {
+    id: "c",
+    title: "Balas dari overlay",
+    how: "Saat live: Ctrl+Shift+E, ketik di kotak balas bawah chat, Enter. Pesan muncul di chat YouTube.",
+  },
+  {
+    id: "d",
+    title: "Sebut penonton",
+    how: "Di mode edit, klik nama penonton: kotak balas terisi \"@nama \".",
+  },
+  {
+    id: "e",
+    title: "Tetap login setelah aplikasi dibuka ulang",
+    how: "Tutup lalu buka aplikasi: masih login dan bisa langsung membalas.",
+  },
+  {
+    id: "f",
+    title: "Logout",
+    how: "Klik Logout: kotak balas meminta login lagi; izin aplikasi dicabut di akun Google.",
+  },
+];
+
 export const PHASE4_ITEMS: ChecklistItem[] = [
   {
     id: "a",

@@ -8,10 +8,18 @@
 //!    tiap 30 detik;
 //! 4. menyiarkan `chat://status` dan `chat://update` ke semua window.
 
+pub mod account;
+pub mod api;
 pub mod buffer;
 pub mod innertube;
+pub mod oauth;
 pub mod parse;
 pub mod source;
+
+/// Server HTTP tiruan untuk test OAuth & Data API (dipakai bersama oleh beberapa modul).
+#[cfg(test)]
+#[path = "../../tests/support/mock_http.rs"]
+mod mock_http;
 
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;

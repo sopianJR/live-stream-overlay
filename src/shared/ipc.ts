@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AccountStatus,
   Alert,
   AppSettings,
   ChatSnapshot,
@@ -20,6 +21,7 @@ export const OBS_NOTICE_EVENT = "obs://notice";
 export const CHAT_STATUS_EVENT = "chat://status";
 export const CHAT_UPDATE_EVENT = "chat://update";
 export const ALERT_UPDATE_EVENT = "alert://update";
+export const ACCOUNT_STATUS_EVENT = "account://status";
 
 export const ipc = {
   // Overlay
@@ -63,6 +65,18 @@ export const ipc = {
   // Chat YouTube
   chatGetSnapshot: () => invoke<ChatSnapshot>("chat_get_snapshot"),
   chatReconnect: () => invoke<void>("chat_reconnect"),
+  /** Mengirim pesan ke live chat yang sedang tampil (butuh login Google, 50 unit kuota). */
+  chatSend: (text: string) => invoke<void>("chat_send", { text }),
+
+  // Akun Google (client secret & token tidak pernah dikirim balik)
+  accountGetStatus: () => invoke<AccountStatus>("account_get_status"),
+  accountSetClient: (clientId: string, clientSecret: string) =>
+    invoke<AccountStatus>("account_set_client", { clientId, clientSecret }),
+  accountClearClient: () => invoke<AccountStatus>("account_clear_client"),
+  /** Membuka browser; selesai setelah login selesai, gagal, atau dibatalkan. */
+  accountLogin: () => invoke<AccountStatus>("account_login"),
+  accountCancelLogin: () => invoke<void>("account_cancel_login"),
+  accountLogout: () => invoke<AccountStatus>("account_logout"),
 
   // Alert
   alertsGet: () => invoke<Alert[]>("alerts_get"),
@@ -95,6 +109,10 @@ export function onChatUpdate(cb: (update: ChatUpdate) => void): Promise<Unlisten
 
 export function onAlerts(cb: (alerts: Alert[]) => void): Promise<UnlistenFn> {
   return listen<Alert[]>(ALERT_UPDATE_EVENT, (e) => cb(e.payload));
+}
+
+export function onAccountStatus(cb: (status: AccountStatus) => void): Promise<UnlistenFn> {
+  return listen<AccountStatus>(ACCOUNT_STATUS_EVENT, (e) => cb(e.payload));
 }
 
 export function onSettingsChanged(cb: (settings: AppSettings) => void): Promise<UnlistenFn> {

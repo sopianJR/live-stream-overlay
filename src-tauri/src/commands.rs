@@ -8,6 +8,7 @@ use crate::obs::{self, ObsService, ObsStatus};
 use crate::overlay::{self, MonitorInfo, OverlayManager, OverlayStatus};
 use crate::secrets;
 use crate::settings::{self, AppSettings, SettingsState};
+use crate::youtube::account::{self, AccountService, AccountStatus};
 use crate::youtube::{ChatService, ChatSnapshot};
 
 fn to_string_err(e: tauri::Error) -> String {
@@ -183,6 +184,49 @@ pub fn chat_get_snapshot(chat: State<'_, ChatService>) -> ChatSnapshot {
 #[tauri::command]
 pub fn chat_reconnect(chat: State<'_, ChatService>) {
     chat.reconnect();
+}
+
+/// Mengirim pesan ke live chat yang sedang ditampilkan (butuh login Google).
+#[tauri::command]
+pub async fn chat_send(app: AppHandle, text: String) -> Result<(), String> {
+    account::send_chat(&app, &text).await
+}
+
+// ---------- Akun Google ----------
+
+#[tauri::command]
+pub fn account_get_status(account: State<'_, AccountService>) -> AccountStatus {
+    account.status()
+}
+
+/// Client secret hanya masuk ke Credential Manager, tidak pernah dikirim balik.
+#[tauri::command]
+pub fn account_set_client(
+    app: AppHandle,
+    client_id: String,
+    client_secret: String,
+) -> Result<AccountStatus, String> {
+    account::set_client(&app, &client_id, &client_secret)
+}
+
+#[tauri::command]
+pub async fn account_clear_client(app: AppHandle) -> Result<AccountStatus, String> {
+    account::clear_client(&app).await
+}
+
+#[tauri::command]
+pub async fn account_login(app: AppHandle) -> Result<AccountStatus, String> {
+    account::login(&app).await
+}
+
+#[tauri::command]
+pub fn account_cancel_login(app: AppHandle) {
+    account::cancel_login(&app);
+}
+
+#[tauri::command]
+pub async fn account_logout(app: AppHandle) -> Result<AccountStatus, String> {
+    account::logout(&app).await
 }
 
 // ---------- Alert ----------

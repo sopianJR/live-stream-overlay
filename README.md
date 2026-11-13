@@ -7,7 +7,7 @@ tertangkap di stream.
 Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka panjang
 (OBS, chat, alert) berjalan di Rust, sedangkan React hanya menampilkan state.
 
-> Status: **Fase 4, alert masalah stream selesai.** Status OBS, live chat YouTube, dan alert sudah asli.
+> Status: **Fase 5, balas chat selesai.** Status OBS, live chat YouTube, alert, dan balas chat sudah asli.
 
 ## Fitur saat ini
 
@@ -35,12 +35,19 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - **pengingat**: mic mute saat live (tiap 2 menit), chat YouTube bermasalah atau live belum terdeteksi
   - stop yang disengaja (dari aplikasi atau tombol Stop di OBS) tidak dianggap masalah
   - debounce agar lonjakan sesaat tidak memicu alert; semua alert tercatat di log
+- **Balas chat dari overlay** (opsional, butuh login Google):
+  - kotak balas di bawah chat saat mode edit; klik nama penonton untuk menyebut `@nama`
+  - login OAuth di browser (PKCE, redirect ke `127.0.0.1`), hanya scope `youtube.force-ssl`
+  - pesan dikirim lewat YouTube Data API ke live yang chat-nya sedang tampil
+    (50 unit kuota/pesan, ±190 pesan/hari dengan kuota gratis)
+  - OAuth client dan refresh token disimpan di Windows Credential Manager
 - Dashboard bertab:
   - **Overlay:** status, pilih monitor, kepekatan latar, ukuran huruf, durasi pudar chat
-  - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat YouTube
+  - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat
+    YouTube, login Google untuk membalas chat (dengan panduan Google Cloud)
   - **Alert:** alert aktif, ambang (frame drop, bitrate, CPU, pengingat mic), tombol *Tes alert*
   - **Hotkey:** ubah kombinasi tombol (direkam langsung, wajib pakai modifier)
-  - **Pengujian:** checklist Fase 4 (alert), Fase 3 (chat), Fase 2 (OBS), dan Fase 0 (overlay)
+  - **Pengujian:** checklist Fase 5 (balas chat), 4 (alert), 3 (chat), 2 (OBS), dan 0 (overlay)
 - System tray, single-instance, dashboard dihancurkan saat ditutup (hemat RAM)
 
 ## Data & log
@@ -50,6 +57,8 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
 | Pengaturan | `%APPDATA%\com.livestreamapps.overlay\settings.json` |
 | Layout widget | `%APPDATA%\com.livestreamapps.overlay\layout.json` |
 | Password OBS | Windows Credential Manager, target `LiveStreamOverlay/obs-websocket` |
+| OAuth client Google | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-client` |
+| Login Google (refresh token) | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-token` |
 | Log | `%LOCALAPPDATA%\com.livestreamapps.overlay\logs\` |
 
 ## Prasyarat
@@ -103,7 +112,9 @@ Unit test mencakup parser hotkey, validasi pengaturan, penyimpanan Credential Ma
 koneksi ke **server OBS tiruan** (password benar/salah/kosong, polling, kontrol, OBS ditutup),
 penguraian chat YouTube dari fixture JSON (`src-tauri/tests/fixtures/youtube/`, berisi data
 rekaan), pengenalan format sumber chat, serta skenario linimasa mesin alert (debounce, cooldown,
-eskalasi, stop disengaja vs mendadak, OBS putus saat live).
+eskalasi, stop disengaja vs mendadak, OBS putus saat live). Alur login Google (PKCE, redirect,
+tukar token, refresh, dibatalkan/ditolak/waktu habis) dan panggilan YouTube Data API diuji
+terhadap server HTTP tiruan (`src-tauri/tests/support/mock_http.rs`), tanpa akun sungguhan.
 
 ### Cek chat YouTube dari terminal
 
@@ -126,6 +137,28 @@ Opsi: `--port 4455`, `--password RAHASIA`, `--live`, `--drop <persen>`, `--kbps 
 `--mic-muted`. Contoh memicu alert: `--live --drop 3 --mic-muted`, lalu matikan server tiruan untuk
 melihat alert "Koneksi ke OBS putus saat live".
 Pastikan WebSocket server OBS asli tidak aktif di port yang sama.
+
+## Menyiapkan balas chat (sekali saja)
+
+Membaca chat tidak perlu login. Untuk membalas dari overlay, buat OAuth client sendiri:
+
+1. Buka [console.cloud.google.com](https://console.cloud.google.com), buat project baru.
+2. **APIs & Services → Library** → aktifkan **YouTube Data API v3**.
+3. **OAuth consent screen** (Google Auth Platform) → tipe *External*, isi nama aplikasi & email.
+   Di *Audience / Test users*, tambahkan akun Google pemilik channel.
+4. **Credentials / Clients → Create OAuth client ID** → tipe **Desktop app**.
+5. Salin Client ID & Client secret ke dashboard → Koneksi → *Balas chat*, lalu **Login dengan Google**.
+
+Selama consent screen masih mode *Testing*, login berlaku 7 hari lalu perlu login ulang.
+
+## Checklist Fase 5 (balas chat)
+
+1. **(a)** OAuth client tersimpan.
+2. **(b)** Login Google berhasil → "Login sebagai <channel>".
+3. **(c)** Saat live: `Ctrl+Shift+E`, ketik di kotak balas, Enter → pesan muncul di chat YouTube.
+4. **(d)** Klik nama penonton → kotak balas terisi `@nama`.
+5. **(e)** Tutup & buka aplikasi → masih login.
+6. **(f)** Logout → kotak balas meminta login lagi; izin dicabut dari akun Google.
 
 ## Checklist Fase 4 (alert)
 
@@ -182,7 +215,8 @@ src-tauri/src/
   obs/            koneksi OBS: reconnect, polling & event (mod.rs), snapshot status (status.rs),
                   bitrate & drop % (stats.rs)
   youtube/        chat YouTube: servis & status (mod.rs), format sumber (source.rs),
-                  klien InnerTube (innertube.rs), penguraian JSON (parse.rs), buffer pesan (buffer.rs)
+                  klien InnerTube (innertube.rs), penguraian JSON (parse.rs), buffer pesan (buffer.rs),
+                  login Google (oauth.rs), YouTube Data API (api.rs), akun & kirim pesan (account.rs)
   alerts/         alert: servis 1 Hz (mod.rs), aturan murni + test linimasa (engine.rs)
   settings.rs     struktur & validasi pengaturan, simpan/muat
   accelerator.rs  parser & normalisasi teks hotkey
@@ -194,6 +228,7 @@ src-tauri/tests/support/mock_obs.rs   server obs-websocket tiruan (test + exampl
 src-tauri/examples/mock_obs.rs        `cargo run --example mock_obs`
 src-tauri/examples/yt_chat.rs         `cargo run --example yt_chat -- @handle`
 src-tauri/tests/fixtures/youtube/     contoh respons InnerTube (data rekaan) untuk test parser
+src-tauri/tests/support/mock_http.rs  server HTTP tiruan (Google OAuth & Data API) untuk test
 ```
 
 ## Rencana berikutnya
@@ -202,5 +237,5 @@ src-tauri/tests/fixtures/youtube/     contoh respons InnerTube (data rekaan) unt
 - ~~**Fase 2:** OBS WebSocket (status asli + kontrol)~~ selesai
 - ~~**Fase 3:** chat YouTube via InnerTube + jumlah penonton~~ selesai
 - ~~**Fase 4:** alert masalah stream~~ selesai
-- **Fase 5:** balas chat (OAuth + YouTube Data API)
+- ~~**Fase 5:** balas chat (OAuth + YouTube Data API)~~ selesai
 - **Fase 6:** polishing & installer

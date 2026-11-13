@@ -110,6 +110,8 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::new().build())
+        // Membuka halaman login Google di browser default.
+        .plugin(tauri_plugin_opener::init())
         .manage(overlay::OverlayManager::default())
         .manage(hotkeys::HotkeyRegistry::default())
         .setup(|app| {
@@ -120,6 +122,7 @@ pub fn run() {
             overlay::create(app.handle(), loaded.overlay.monitor.as_deref())?;
             obs::init(app.handle());
             youtube::init(app.handle());
+            youtube::account::init(app.handle());
             alerts::init(app.handle());
             hotkeys::init(app)?;
             hotkeys::apply(app.handle(), &loaded.hotkeys);
@@ -163,6 +166,13 @@ pub fn run() {
             commands::obs_list_audio_inputs,
             commands::chat_get_snapshot,
             commands::chat_reconnect,
+            commands::chat_send,
+            commands::account_get_status,
+            commands::account_set_client,
+            commands::account_clear_client,
+            commands::account_login,
+            commands::account_cancel_login,
+            commands::account_logout,
             commands::alerts_get,
             commands::alerts_dismiss,
             commands::alerts_test,

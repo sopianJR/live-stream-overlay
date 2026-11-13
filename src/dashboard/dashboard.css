@@ -544,3 +544,14 @@ input[type="number"] {
 .rules li:last-child {
   border-bottom: none;
 }
+
+/* ---------- Login Google ---------- */
+.steps {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.steps li {
+  margin-bottom: 4px;
+}

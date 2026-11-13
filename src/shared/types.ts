@@ -225,3 +225,15 @@ export interface Alert {
   /** Naik setiap kali alert (di)tampilkan. */
   seq: number;
 }
+
+// ---------- Akun Google (balas chat) ----------
+
+export type AccountState = "signedOut" | "signingIn" | "signedIn";
+
+export interface AccountStatus {
+  /** OAuth client (Client ID + secret) sudah diisi. */
+  hasClient: boolean;
+  state: AccountState;
+  channelTitle: string | null;
+  message: string | null;
+}

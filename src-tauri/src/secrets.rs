@@ -30,6 +30,26 @@ pub fn clear_obs_password() -> Result<(), String> {
     imp::delete(OBS_PASSWORD_TARGET)
 }
 
+/// OAuth client Google milik user (JSON: client ID + client secret).
+pub const YOUTUBE_CLIENT_TARGET: &str = "LiveStreamOverlay/youtube-oauth-client";
+/// Refresh token + info channel hasil login Google (JSON).
+pub const YOUTUBE_TOKEN_TARGET: &str = "LiveStreamOverlay/youtube-oauth-token";
+
+pub fn read(target: &str) -> Result<Option<String>, String> {
+    imp::read(target)
+}
+
+pub fn write(target: &str, value: &str) -> Result<(), String> {
+    if value.len() > MAX_SECRET_BYTES {
+        return Err("Data rahasia terlalu besar untuk Credential Manager.".into());
+    }
+    imp::write(target, value)
+}
+
+pub fn delete(target: &str) -> Result<(), String> {
+    imp::delete(target)
+}
+
 #[cfg(windows)]
 mod imp {
     use windows_sys::Win32::Foundation::{GetLastError, ERROR_NOT_FOUND, FILETIME};
