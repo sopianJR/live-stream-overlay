@@ -6,12 +6,22 @@ import {
   PHASE4_ITEMS,
   PHASE5_ITEMS,
   PHASE7_ITEMS,
+  PHASE8_ITEMS,
 } from "../Checklist";
 import type { AppSettings } from "../../shared/types";
 
 export function TestingTab({ settings }: { settings: AppSettings }) {
   return (
     <div className="grid">
+      <section className="card wide">
+        <h2>Checklist Fase 8 · ringkasan sesi &amp; mic</h2>
+        <Checklist
+          storageKey="phase8-checklist"
+          items={PHASE8_ITEMS}
+          doneText="Ringkasan sesi dan alert mic siap dipakai saat live."
+        />
+      </section>
+
       <section className="card wide">
         <h2>Checklist Fase 7 · alert donasi Trakteer</h2>
         <Checklist

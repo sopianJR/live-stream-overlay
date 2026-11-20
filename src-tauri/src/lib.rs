@@ -5,6 +5,7 @@ mod hotkeys;
 mod obs;
 mod overlay;
 mod secrets;
+mod session;
 mod settings;
 mod trakteer;
 /// Publik agar bisa dipakai `examples/yt_chat.rs`.
@@ -14,13 +15,13 @@ use std::sync::Mutex;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 const DASHBOARD_LABEL: &str = "main";
 
 /// Membuka dashboard. Saat ditutup, dashboard dihancurkan (bukan disembunyikan) agar
 /// renderer WebView2-nya tidak memakan RAM selama bermain game; dibuat ulang di sini.
-fn show_dashboard(app: &AppHandle) {
+pub(crate) fn show_dashboard(app: &AppHandle) {
     let win = match app.get_webview_window(DASHBOARD_LABEL) {
         Some(win) => win,
         None => {
@@ -125,6 +126,7 @@ pub fn run() {
             youtube::init(app.handle());
             youtube::account::init(app.handle());
             trakteer::init(app.handle());
+            session::init(app.handle());
             alerts::init(app.handle());
             hotkeys::init(app)?;
             hotkeys::apply(app.handle(), &loaded.hotkeys);
@@ -160,6 +162,7 @@ pub fn run() {
             commands::obs_password_clear,
             commands::obs_get_status,
             commands::obs_reconnect,
+            commands::obs_mic_level,
             commands::obs_start_stream,
             commands::obs_stop_stream,
             commands::obs_toggle_record,
@@ -184,9 +187,18 @@ pub fn run() {
             commands::alerts_get,
             commands::alerts_dismiss,
             commands::alerts_test,
+            commands::session_get_state,
+            commands::session_delete,
+            commands::session_clear,
             commands::app_quit,
             commands::app_open_log_folder,
         ])
-        .run(tauri::generate_context!())
-        .expect("gagal menjalankan aplikasi");
+        .build(tauri::generate_context!())
+        .expect("gagal membangun aplikasi")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                // Sesi yang sedang live disimpan; dipulihkan ke riwayat saat start berikutnya.
+                session::save_now(app);
+            }
+        });
 }

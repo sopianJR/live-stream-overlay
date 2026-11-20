@@ -7,7 +7,7 @@ tertangkap di stream.
 Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka panjang
 (OBS, chat, alert) berjalan di Rust, sedangkan React hanya menampilkan state.
 
-> Status: **Fase 7, alert donasi Trakteer digabung** dari trakteer-live-suite. Installer Windows (NSIS) tersedia.
+> Status: **Fase 8, ringkasan sesi stream + alert "mic tidak terdengar"**. Installer Windows (NSIS) tersedia.
 > Yang tersisa: uji langsung saat live sungguhan (checklist di dashboard → Pengujian).
 
 ## Fitur saat ini
@@ -34,6 +34,9 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - **peringatan** (10 detik, diulang berkala): frame drop ≥ 1%, bitrate turun di bawah 50% dari
     normal, jaringan padat, CPU OBS tinggi, frame terlewat saat render/encoding
   - **pengingat**: mic mute saat live (tiap 2 menit), chat YouTube bermasalah atau live belum terdeteksi
+  - **mic dari level audio OBS** (Fase 8): "Mic tidak terdengar" jika mic tidak mute tapi tanpa
+    suara selama 2 menit (bisa diatur), dan "Suara mic pecah" jika peak menyentuh 0 dB ≥ 3 detik
+    dalam 10 detik. Level dibaca dari event `InputVolumeMeters` OBS (20×/detik), hanya saat aturannya aktif
   - stop yang disengaja (dari aplikasi atau tombol Stop di OBS) tidak dianggap masalah
   - debounce agar lonjakan sesaat tidak memicu alert; semua alert tercatat di log
 - **Alert donasi Trakteer** (digabung dari trakteer-live-suite):
@@ -44,6 +47,14 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - filter minimal nominal, tampilkan/sembunyikan donasi test dan pesan, durasi tampil
   - sambung ulang otomatis (1,5 detik ×1,6, maks. 10 detik); pengingat jika terputus saat live
   - kunci disimpan di Windows Credential Manager; log hanya mencatat nominal
+- **Ringkasan sesi stream** (Fase 8):
+  - dicatat otomatis selama live: durasi, puncak & rata-rata penonton, pesan chat, chatter unik,
+    Super Chat, member baru, donasi Trakteer (tanpa test) + top donatur, rata-rata bitrate,
+    frame drop, reconnect, dan timeline alert; grafik penonton & bitrate per menit
+  - stream putus lalu live lagi dalam 3 menit dihitung satu sesi
+  - setelah stream selesai: info "Stream selesai" di overlay dan dashboard terbuka di tab Riwayat
+    (bisa dimatikan; sesi < 2 menit tidak membuka dashboard)
+  - 30 sesi terakhir disimpan lokal; sesi yang terputus karena aplikasi ditutup dipulihkan
 - **Balas chat dari overlay** (opsional, butuh login Google):
   - kotak balas di bawah chat saat mode edit; klik nama penonton untuk menyebut `@nama`
   - login OAuth di browser (PKCE, redirect ke `127.0.0.1`), hanya scope `youtube.force-ssl`
@@ -55,9 +66,11 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
   - **Overlay:** status, pilih monitor, kepekatan latar, ukuran huruf, durasi pudar chat
   - **Koneksi:** status OBS & chat, alamat & password OBS, input mic yang dipantau, sumber chat
     YouTube, kunci Trakteer + riwayat donasi, login Google untuk membalas chat
-  - **Alert:** alert aktif, ambang (frame drop, bitrate, CPU, pengingat mic), tombol *Tes alert*
+  - **Alert:** alert aktif, ambang (frame drop, bitrate, CPU, pengingat mic, mic diam, suara
+    pecah), meter *Tes mic*, tombol *Tes alert*
+  - **Riwayat:** ringkasan sesi terakhir dan sesi-sesi sebelumnya
   - **Hotkey:** ubah kombinasi tombol (direkam langsung, wajib pakai modifier)
-  - **Pengujian:** checklist Fase 5 (balas chat), 4 (alert), 3 (chat), 2 (OBS), dan 0 (overlay)
+  - **Pengujian:** checklist Fase 8 (ringkasan sesi & mic), 7 (Trakteer), 5 (balas chat), 4 (alert), 3 (chat), 2 (OBS), dan 0 (overlay)
 - System tray, single-instance, dashboard dihancurkan saat ditutup (hemat RAM)
 - Tombol **Buka folder log** di dashboard untuk meninjau riwayat koneksi & alert setelah stream
 
@@ -71,6 +84,7 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
 | OAuth client Google | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-client` |
 | Login Google (refresh token) | Windows Credential Manager, target `LiveStreamOverlay/youtube-oauth-token` |
 | Kunci Trakteer | Windows Credential Manager, target `LiveStreamOverlay/trakteer-key` |
+| Riwayat sesi stream | `%APPDATA%\com.livestreamapps.overlay\sessions.json` (30 sesi terakhir) |
 | Log | `%LOCALAPPDATA%\com.livestreamapps.overlay\logs\` |
 
 ## Instal (pengguna)
@@ -143,6 +157,9 @@ rekaan), pengenalan format sumber chat, serta skenario linimasa mesin alert (deb
 eskalasi, stop disengaja vs mendadak, OBS putus saat live). Alur login Google (PKCE, redirect,
 tukar token, refresh, dibatalkan/ditolak/waktu habis) dan panggilan YouTube Data API diuji
 terhadap server HTTP tiruan (`src-tauri/tests/support/mock_http.rs`), tanpa akun sungguhan.
+Fase 8 menambah test level mic (`obs/audio.rs`, termasuk langganan & reidentify ke OBS tiruan),
+aturan mic diam/pecah, perekam sesi (stop normal, putus lalu lanjut, putus total) dan
+penyimpanan riwayat.
 
 ### Cek chat YouTube dari terminal
 
@@ -174,8 +191,10 @@ cd src-tauri && cargo run --example mock_obs -- --live --drop 0.5
 ```
 
 Opsi: `--port 4455`, `--password RAHASIA`, `--live`, `--drop <persen>`, `--kbps <bitrate>`,
-`--mic-muted`. Contoh memicu alert: `--live --drop 3 --mic-muted`, lalu matikan server tiruan untuk
-melihat alert "Koneksi ke OBS putus saat live".
+`--mic-muted`, `--mic-db <dB>`, `--mic-silent`, `--mic-clip`, `--stop-after <detik>`.
+Contoh memicu alert: `--live --drop 3 --mic-muted`, lalu matikan server tiruan untuk
+melihat alert "Koneksi ke OBS putus saat live". `--live --mic-silent --stop-after 170` memicu
+"Mic tidak terdengar" setelah 2 menit, lalu menghentikan stream sehingga ringkasan sesi muncul.
 Pastikan WebSocket server OBS asli tidak aktif di port yang sama.
 
 ## Menyiapkan balas chat (sekali saja)
@@ -190,6 +209,15 @@ Membaca chat tidak perlu login. Untuk membalas dari overlay, buat OAuth client s
 5. Salin Client ID & Client secret ke dashboard → Koneksi → *Balas chat*, lalu **Login dengan Google**.
 
 Selama consent screen masih mode *Testing*, login berlaku 7 hari lalu perlu login ulang.
+
+## Checklist Fase 8 (ringkasan sesi & mic)
+
+1. **(a)** Tab Alert → Tes mic: bicara ke mic → bar melewati garis −50 dB.
+2. **(b)** Live (tes) dengan device mic salah di OBS → "Mic tidak terdengar" setelah 2 menit.
+3. **(c)** Gain mic terlalu tinggi lalu bicara keras → "Suara mic pecah".
+4. **(d)** Live ≥ 2 menit lalu stop dari OBS → "Stream selesai" di overlay, dashboard terbuka di tab Riwayat.
+5. **(e)** Angka ringkasan dibandingkan dengan YouTube Studio; donasi test Trakteer tidak dihitung.
+6. **(f)** Tutup lalu buka aplikasi → sesi masih ada di tab Riwayat; hapus sesi berfungsi.
 
 ## Checklist Fase 7 (alert donasi Trakteer)
 
@@ -262,12 +290,14 @@ src/
 src-tauri/src/
   overlay/        window overlay, monitor, mode pasif/edit, flag Win32, watchdog topmost
   obs/            koneksi OBS: reconnect, polling & event (mod.rs), snapshot status (status.rs),
-                  bitrate & drop % (stats.rs)
+                  bitrate & drop % (stats.rs), level mic dari volume meter (audio.rs)
   youtube/        chat YouTube: servis & status (mod.rs), format sumber (source.rs),
                   klien InnerTube (innertube.rs), penguraian JSON (parse.rs), buffer pesan (buffer.rs),
                   login Google (oauth.rs), YouTube Data API (api.rs), akun & kirim pesan (account.rs)
   alerts/         alert: servis 1 Hz (mod.rs), aturan murni + test linimasa (engine.rs)
   trakteer/       alert donasi: koneksi V1/V2 + reconnect (mod.rs), parser protokol murni (protocol.rs)
+  session/        ringkasan sesi: servis 1 Hz + hook (mod.rs), perekam murni (recorder.rs),
+                  riwayat sessions.json (store.rs)
   settings.rs     struktur & validasi pengaturan, simpan/muat
   accelerator.rs  parser & normalisasi teks hotkey
   hotkeys.rs      hotkey global yang bisa diubah (+ jeda saat direkam)
@@ -291,4 +321,5 @@ src-tauri/tests/support/mock_trakteer.rs + examples/mock_trakteer.rs  server Tra
 - ~~**Fase 5:** balas chat (OAuth + YouTube Data API)~~ selesai
 - ~~**Fase 6:** polishing & installer~~ selesai (uji live sungguhan menunggu user)
 - ~~**Fase 7:** alert donasi Trakteer (gabung dari trakteer-live-suite)~~ selesai
+- ~~**Fase 8:** ringkasan sesi stream + alert mic tidak terdengar / pecah~~ selesai
 - **Berikutnya:** command engine donasi → keyboard/mouse dari trakteer-live-suite

@@ -39,6 +39,39 @@ export const PHASE0_ITEMS: ChecklistItem[] = [
   },
 ];
 
+export const PHASE8_ITEMS: ChecklistItem[] = [
+  {
+    id: "a",
+    title: "Meter Tes mic bergerak",
+    how: "Tab Alert → Tes mic: bicara ke mic, bar melewati garis −50 dB dan status \"Suara terdeteksi\".",
+  },
+  {
+    id: "b",
+    title: "Alert mic tidak terdengar",
+    how: "Saat live (tes), pilih device mic yang salah di OBS: setelah 2 menit muncul \"Mic tidak terdengar\".",
+  },
+  {
+    id: "c",
+    title: "Alert suara mic pecah",
+    how: "Naikkan gain mic sampai meter merah lalu bicara keras: muncul \"Suara mic pecah\".",
+  },
+  {
+    id: "d",
+    title: "Ringkasan setelah stream",
+    how: "Live ≥ 2 menit lalu stop dari OBS: overlay menampilkan \"Stream selesai\" dan dashboard terbuka di tab Riwayat.",
+  },
+  {
+    id: "e",
+    title: "Angka ringkasan masuk akal",
+    how: "Bandingkan durasi, penonton, dan jumlah chat dengan YouTube Studio; donasi Trakteer test tidak dihitung.",
+  },
+  {
+    id: "f",
+    title: "Riwayat tersimpan",
+    how: "Tutup lalu buka aplikasi: sesi masih ada di tab Riwayat. Hapus satu sesi berfungsi.",
+  },
+];
+
 export const PHASE7_ITEMS: ChecklistItem[] = [
   {
     id: "a",

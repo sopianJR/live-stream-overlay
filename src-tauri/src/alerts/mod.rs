@@ -73,6 +73,8 @@ fn snapshot(app: &AppHandle) -> Snapshot {
         render_lag_pct: perf.and_then(|p| p.render_lag_pct),
         encode_lag_pct: perf.and_then(|p| p.encode_lag_pct),
         mic_muted: obs.mic.as_ref().map(|m| m.muted),
+        mic_name: obs.mic.as_ref().map(|m| m.name.clone()),
+        mic_audio: Some(obs_service.mic_audio()).filter(|a| a.known),
         last_stop: obs.last_stop,
         app_stop_at_ms: obs.app_stop_at_ms,
         chat,
@@ -81,6 +83,7 @@ fn snapshot(app: &AppHandle) -> Snapshot {
 }
 
 fn publish(app: &AppHandle, tick: Tick) {
+    crate::session::on_alerts(app, &tick.raised);
     for alert in &tick.raised {
         // Tercatat di log agar bisa ditinjau setelah stream.
         log::info!(
@@ -135,4 +138,16 @@ pub fn raise_test(app: &AppHandle) -> Vec<Alert> {
     };
     emit(app, &list);
     list
+}
+
+/// Info singkat di widget alert overlay, hilang sendiri setelah `ttl_ms`.
+pub fn notify_info(app: &AppHandle, id: &str, title: String, detail: Option<String>, ttl_ms: u64) {
+    let svc = app.state::<AlertService>();
+    let now = app.state::<ObsService>().now_ms();
+    let list = {
+        let mut engine = svc.lock();
+        engine.raise_info(id, title, detail, now, ttl_ms);
+        engine.active()
+    };
+    emit(app, &list);
 }

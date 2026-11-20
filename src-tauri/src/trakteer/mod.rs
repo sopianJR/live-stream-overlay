@@ -246,6 +246,9 @@ fn on_donation(app: &AppHandle, donation: Donation, test: bool) {
         shared.recent.truncate(RECENT_CAPACITY);
         shared.recent.iter().cloned().collect::<Vec<_>>()
     };
+    if kind == DonationKind::Live {
+        crate::session::on_donation(app, &event.donation.supporter_name, event.donation.amount_rp);
+    }
     log::info!(
         "donasi Trakteer diterima {}{}",
         event.donation.price_text,

@@ -4,9 +4,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::alerts::{self, engine::Alert, AlertService};
 use crate::hotkeys::{self, HotkeyInfo, HotkeyRegistry};
-use crate::obs::{self, ObsService, ObsStatus};
+use crate::obs::{self, MicAudio, ObsService, ObsStatus};
 use crate::overlay::{self, MonitorInfo, OverlayManager, OverlayStatus};
 use crate::secrets;
+use crate::session::{SessionService, SessionState};
 use crate::settings::{self, AppSettings, SettingsState};
 use crate::trakteer::{self, KeyStatus, TrakteerService, TrakteerSnapshot};
 use crate::youtube::account::{self, AccountService, AccountStatus};
@@ -82,8 +83,13 @@ pub fn settings_save(
     let obs = app.state::<ObsService>();
     if !next.obs.same_endpoint(&prev.obs) {
         obs.reconnect();
-    } else if next.obs.mic_input != prev.obs.mic_input {
-        obs.refresh_mic();
+    } else {
+        if next.obs.mic_input != prev.obs.mic_input {
+            obs.refresh_mic();
+        }
+        if next.alerts.wants_mic_levels() != prev.alerts.wants_mic_levels() {
+            obs.resubscribe();
+        }
     }
     if next.youtube.source != prev.youtube.source {
         app.state::<ChatService>().reconnect();
@@ -137,6 +143,12 @@ pub fn obs_password_clear(obs: State<'_, ObsService>) -> Result<(), String> {
 #[tauri::command]
 pub fn obs_get_status(obs: State<'_, ObsService>) -> ObsStatus {
     obs.status()
+}
+
+/// Level mic terkini untuk meter "Tes mic" di dashboard.
+#[tauri::command]
+pub fn obs_mic_level(obs: State<'_, ObsService>) -> MicAudio {
+    obs.mic_audio()
 }
 
 #[tauri::command]
@@ -280,6 +292,24 @@ pub fn alerts_dismiss(app: AppHandle, id: String) -> Vec<Alert> {
 #[tauri::command]
 pub fn alerts_test(app: AppHandle) -> Vec<Alert> {
     alerts::raise_test(&app)
+}
+
+// ---------- Ringkasan sesi ----------
+
+/// `takeFocus`: dashboard yang baru dibuka mengambil penanda "tampilkan sesi ini" (sekali saja).
+#[tauri::command]
+pub fn session_get_state(sessions: State<'_, SessionService>, take_focus: bool) -> SessionState {
+    sessions.state(take_focus)
+}
+
+#[tauri::command]
+pub fn session_delete(sessions: State<'_, SessionService>, id: String) -> SessionState {
+    sessions.delete(&id)
+}
+
+#[tauri::command]
+pub fn session_clear(sessions: State<'_, SessionService>) -> SessionState {
+    sessions.clear()
 }
 
 // ---------- Aplikasi ----------

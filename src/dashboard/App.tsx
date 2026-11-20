@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { errorText, ipc } from "../shared/ipc";
+import { errorText, ipc, onSessionSummary } from "../shared/ipc";
 import { useSettings } from "../shared/useSettings";
 import { AlertTab } from "./tabs/AlertTab";
 import { ConnectionTab } from "./tabs/ConnectionTab";
+import { HistoryTab } from "./tabs/HistoryTab";
 import { HotkeyTab } from "./tabs/HotkeyTab";
 import { OverlayTab } from "./tabs/OverlayTab";
 import { ONBOARDING_DONE_KEY, StartTab } from "./tabs/StartTab";
@@ -14,6 +15,7 @@ const TABS = [
   { id: "overlay", label: "Overlay" },
   { id: "connection", label: "Koneksi" },
   { id: "alerts", label: "Alert" },
+  { id: "history", label: "Riwayat" },
   { id: "hotkeys", label: "Hotkey" },
   { id: "testing", label: "Pengujian" },
 ] as const;
@@ -65,6 +67,20 @@ export default function App() {
     storageSet(TAB_KEY, id);
   };
 
+  // Stream baru selesai: langsung tampilkan ringkasannya.
+  useEffect(() => {
+    ipc
+      .sessionGetState(false)
+      .then((s) => {
+        if (s.focusId) setTab("history");
+      })
+      .catch(() => {});
+    const unlisten = onSessionSummary(() => setTab("history"));
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   const finishOnboarding = () => {
     storageSet(ONBOARDING_DONE_KEY, "1");
     selectTab("overlay");
@@ -110,6 +126,8 @@ export default function App() {
           <ConnectionTab settings={settings} save={save} />
         ) : tab === "alerts" ? (
           <AlertTab settings={settings} save={save} />
+        ) : tab === "history" ? (
+          <HistoryTab settings={settings} save={save} />
         ) : tab === "hotkeys" ? (
           <HotkeyTab settings={settings} save={save} />
         ) : (

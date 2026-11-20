@@ -63,6 +63,15 @@ export interface AlertSettings {
   /** CPU OBS; 0 = mati. */
   cpuPct: number;
   micReminder: boolean;
+  /** Detik tanpa suara dari mic (tidak mute) saat live; 30–900, 0 = mati. */
+  micSilenceS: number;
+  /** Peringatkan jika suara mic pecah (peak menyentuh 0 dBFS). */
+  micClipping: boolean;
+}
+
+export interface SessionSettings {
+  /** Buka dashboard di tab Riwayat setelah stream selesai. */
+  openOnEnd: boolean;
 }
 
 export interface TrakteerSettings {
@@ -81,6 +90,7 @@ export interface AppSettings {
   hotkeys: HotkeySettings;
   alerts: AlertSettings;
   trakteer: TrakteerSettings;
+  session: SessionSettings;
 }
 
 export type WidgetId = "obsStatus" | "chat" | "alerts" | "trakteer";
@@ -290,4 +300,58 @@ export interface TrakteerSnapshot {
 export interface TrakteerKeyStatus {
   hasKey: boolean;
   protocol: TrakteerProtocol | null;
+}
+
+// ---------- Level mic (Fase 8) ----------
+
+export interface MicAudio {
+  /** OBS mengirim level untuk input mic dalam 3 detik terakhir. */
+  known: boolean;
+  silentForMs: number;
+  /** Detik (dari 10 detik terakhir) suara mic pecah. */
+  clipSeconds: number;
+  /** Peak terbaru dalam dBFS; null = senyap total. */
+  peakDb: number | null;
+}
+
+// ---------- Ringkasan sesi (Fase 8) ----------
+
+export type SessionEndReason = "stopped" | "lost" | "appClosed";
+
+export interface SessionSummary {
+  id: string;
+  /** Unix ms. */
+  startedAt: number;
+  endedAt: number | null;
+  durationMs: number;
+  /** null = masih berjalan. */
+  endReason: SessionEndReason | null;
+  drops: number;
+  reconnects: number;
+  viewers: { peak: number | null; average: number | null };
+  chat: {
+    messages: number;
+    chatters: number;
+    superChatCount: number;
+    superChats: Array<{ name: string; amount: string }>;
+    memberships: number;
+    gifts: number;
+  };
+  trakteer: { count: number; totalRp: number; top: Array<{ name: string; totalRp: number; count: number }> };
+  stream: {
+    avgBitrateKbps: number | null;
+    droppedFrames: number;
+    totalFrames: number;
+    droppedPct: number | null;
+  };
+  timeline: Array<{ minute: number; viewers: number | null; bitrateKbps: number | null }>;
+  alerts: Array<{ atS: number; level: AlertLevel; title: string }>;
+}
+
+export interface SessionState {
+  current: SessionSummary | null;
+  /** Terbaru dulu. */
+  history: SessionSummary[];
+  /** Sesi yang baru selesai dan harus langsung ditampilkan. */
+  focusId: string | null;
 }

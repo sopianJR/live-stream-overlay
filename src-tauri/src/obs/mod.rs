@@ -4,10 +4,12 @@
 //! - menghubungkan, lalu mencoba ulang dengan backoff (1, 2, 4, 8, kemudian tiap 10 detik);
 //! - berhenti mencoba saat password salah, sampai pengaturan atau password diubah;
 //! - polling statistik tiap detik dan mendengarkan event (stream, rekaman, scene, mic);
+//! - jika aturan level mic aktif, mendengarkan event level audio 20×/detik (`audio.rs`);
 //! - menyiarkan [`ObsStatus`] ke semua window lewat event `obs://status`.
 //!
 //! Command kontrol (start/stop stream, rekaman, mic, scene) memakai klien yang sama.
 
+mod audio;
 mod stats;
 mod status;
 
@@ -18,6 +20,7 @@ use std::time::{Duration, Instant};
 use futures_util::StreamExt;
 use obws::client::{ConnectConfig, HandshakeError};
 use obws::error::Error as ObsError;
+use obws::events::Event;
 use obws::requests::inputs::InputId;
 use obws::requests::EventSubscription;
 use obws::responses::StatusCode;
@@ -29,6 +32,8 @@ use tokio::time::MissedTickBehavior;
 
 use crate::secrets;
 use crate::settings::{ObsSettings, SettingsState};
+use audio::MicMeter;
+pub use audio::MicAudio;
 use stats::StatsTracker;
 pub use status::{Connection, ObsStatus, StreamStop};
 use status::{EventEffect, MicInfo, PollSample};
@@ -52,11 +57,15 @@ enum Control {
     Reconnect,
     /// Input mic yang dipilih berubah; cukup dibaca ulang tanpa memutus koneksi.
     RefreshMic,
+    /// Aturan level mic dinyalakan/dimatikan; langganan event diperbarui (Reidentify).
+    Resubscribe,
 }
 
 struct Shared {
     status: ObsStatus,
     client: Option<Arc<Client>>,
+    /// Di luar `status` agar event level 20×/detik tidak memicu emit `obs://status`.
+    meter: MicMeter,
 }
 
 pub struct ObsService {
@@ -80,6 +89,16 @@ impl ObsService {
 
     pub fn refresh_mic(&self) {
         let _ = self.control.send(Control::RefreshMic);
+    }
+
+    pub fn resubscribe(&self) {
+        let _ = self.control.send(Control::Resubscribe);
+    }
+
+    /// Level mic terkini; `known = false` jika OBS tidak mengirim level (mis. aturan mati).
+    pub fn mic_audio(&self) -> MicAudio {
+        let now = self.now_ms();
+        self.lock().meter.audio(now)
     }
 
     fn client(&self) -> Result<Arc<Client>, String> {
@@ -108,7 +127,11 @@ pub fn init(app: &AppHandle) {
     let settings = app.state::<SettingsState>().get().obs;
     let (control, rx) = mpsc::unbounded_channel();
     app.manage(ObsService {
-        shared: Mutex::new(Shared { status: ObsStatus::new(endpoint(&settings)), client: None }),
+        shared: Mutex::new(Shared {
+            status: ObsStatus::new(endpoint(&settings)),
+            client: None,
+            meter: MicMeter::default(),
+        }),
         control,
         epoch: Instant::now(),
     });
@@ -200,24 +223,30 @@ fn classify(e: &ObsError, had_password: bool, target: &str) -> Failure {
     Failure { kind, message }
 }
 
-fn event_subscriptions() -> EventSubscription {
-    EventSubscription::GENERAL
+fn event_subscriptions(mic_levels: bool) -> EventSubscription {
+    let base = EventSubscription::GENERAL
         | EventSubscription::SCENES
         | EventSubscription::INPUTS
-        | EventSubscription::OUTPUTS
+        | EventSubscription::OUTPUTS;
+    if mic_levels { base | EventSubscription::INPUT_VOLUME_METERS } else { base }
+}
+
+fn wanted_subscriptions(app: &AppHandle) -> EventSubscription {
+    event_subscriptions(app.state::<SettingsState>().get().alerts.wants_mic_levels())
 }
 
 async fn connect(
     settings: &ObsSettings,
     password: Option<&str>,
     target: &str,
+    subscriptions: EventSubscription,
 ) -> Result<Client, Failure> {
     let config = ConnectConfig {
         host: settings.host.as_str(),
         port: settings.port,
         dangerous: None,
         password,
-        event_subscriptions: Some(event_subscriptions()),
+        event_subscriptions: Some(subscriptions),
         broadcast_capacity: 256,
         connect_timeout: CONNECT_TIMEOUT,
     };
@@ -273,7 +302,7 @@ async fn run(app: AppHandle, mut rx: mpsc::UnboundedReceiver<Control>) {
             true
         });
 
-        let delay = match connect(&settings, password.as_deref(), &target).await {
+        let delay = match connect(&settings, password.as_deref(), &target, wanted_subscriptions(&app)).await {
             Ok(client) => {
                 attempt = 0;
                 last_logged = None;
@@ -395,7 +424,11 @@ async fn session(
         return SessionEnd::Lost("OBS tidak merespons.".into());
     };
 
-    svc.lock().client = Some(Arc::clone(&client));
+    {
+        let mut shared = svc.lock();
+        shared.client = Some(Arc::clone(&client));
+        shared.meter.reset();
+    }
     update(app, |s| {
         s.connection = Connection::Connected;
         s.message = None;
@@ -434,6 +467,13 @@ async fn session(
                     break SessionEnd::Lost("Koneksi ke OBS terputus.".into());
                 };
                 let t = svc.now_ms();
+                if let Event::InputVolumeMeters { inputs } = &event {
+                    let mut shared = svc.lock();
+                    let Shared { status, meter, .. } = &mut *shared;
+                    let mic = status.mic.as_ref().map(|m| m.name.as_str());
+                    meter.observe(t, mic, inputs.iter().map(|i| (i.name.as_str(), i.levels.as_slice())));
+                    continue;
+                }
                 let mut effect = EventEffect::Unchanged;
                 update(app, |s| {
                     effect = status::apply_event(s, &mut tracker, t, &event);
@@ -452,18 +492,38 @@ async fn session(
                     else {
                         break SessionEnd::Lost("OBS tidak merespons.".into());
                     };
+                    svc.lock().meter.reset();
                     update(app, |s| {
                         s.mic = mic;
                         s.mic_note = mic_note;
                         true
                     });
                 }
+                Some(Control::Resubscribe) => {
+                    let subs = wanted_subscriptions(app);
+                    match tokio::time::timeout(POLL_TIMEOUT, client.reidentify(subs)).await {
+                        Ok(Ok(())) => {
+                            log::info!(
+                                "langganan level mic OBS {}",
+                                if subs.contains(EventSubscription::INPUT_VOLUME_METERS) { "aktif" } else { "mati" }
+                            );
+                            svc.lock().meter.reset();
+                        }
+                        Ok(Err(e)) if is_disconnect(&e) => break SessionEnd::Lost("Koneksi ke OBS terputus.".into()),
+                        Ok(Err(e)) => log::warn!("gagal memperbarui langganan event OBS: {e}"),
+                        Err(_) => break SessionEnd::Lost("OBS tidak merespons.".into()),
+                    }
+                }
                 None => break SessionEnd::Shutdown,
             },
         }
     };
 
-    svc.lock().client = None;
+    {
+        let mut shared = svc.lock();
+        shared.client = None;
+        shared.meter.reset();
+    }
     end
 }
 
@@ -620,7 +680,7 @@ mod tests {
     }
 
     async fn connect_to(mock: &MockObs, password: Option<&str>) -> Result<Client, Failure> {
-        connect(&settings(mock.port), password, "uji").await
+        connect(&settings(mock.port), password, "uji", event_subscriptions(false)).await
     }
 
     #[test]
@@ -656,7 +716,8 @@ mod tests {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
             listener.local_addr().unwrap().port()
         };
-        let failure = connect(&settings(port), None, "127.0.0.1:x").await.err().expect("harus gagal");
+        let failure =
+            connect(&settings(port), None, "127.0.0.1:x", event_subscriptions(false)).await.err().expect("harus gagal");
         assert_eq!(failure.kind, FailureKind::Retry);
         assert!(failure.message.contains("tidak ditemukan"), "{}", failure.message);
     }
@@ -738,6 +799,54 @@ mod tests {
 
         assert!(client.recording().toggle().await.unwrap());
         assert!(mock.is_recording());
+    }
+
+    /// Menunggu event `InputVolumeMeters` berikutnya dan memasukkannya ke meter.
+    async fn next_meter(events: &mut (impl futures_util::Stream<Item = Event> + Unpin), meter: &mut MicMeter, t: u64) -> bool {
+        let found = tokio::time::timeout(Duration::from_secs(1), async {
+            while let Some(event) = events.next().await {
+                if let Event::InputVolumeMeters { inputs } = &event {
+                    meter.observe(t, Some("Mic/Aux"), inputs.iter().map(|i| (i.name.as_str(), i.levels.as_slice())));
+                    return true;
+                }
+            }
+            false
+        })
+        .await;
+        found == Ok(true)
+    }
+
+    #[tokio::test]
+    async fn mic_levels_subscribe_and_reidentify() {
+        let mock = start_mock(MockConfig { mic_level_db: None, ..Default::default() }).await;
+        let client = connect(&settings(mock.port), None, "uji", event_subscriptions(true)).await.expect("terhubung");
+        assert_eq!(mock.last_subscriptions(), Some(u64::from(event_subscriptions(true).bits())));
+        let mut events = client.events().expect("event");
+        let mut meter = MicMeter::default();
+
+        // Mic senyap: event datang, mic terdeteksi diam.
+        assert!(next_meter(&mut events, &mut meter, 0).await);
+        assert!(next_meter(&mut events, &mut meter, 5_000).await);
+        let a = meter.audio(5_000);
+        assert!(a.known && a.silent_for_ms == 5_000 && a.peak_db.is_none(), "{a:?}");
+
+        // Bicara pada −20 dB.
+        mock.set_mic_level(Some(-20.0));
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        assert!(next_meter(&mut events, &mut meter, 5_100).await);
+        assert!(next_meter(&mut events, &mut meter, 5_150).await);
+        let a = meter.audio(5_150);
+        assert_eq!(a.silent_for_ms, 0);
+        assert!((a.peak_db.unwrap() + 20.0).abs() < 0.1, "{a:?}");
+
+        // Matikan langganan tanpa memutus koneksi.
+        client.reidentify(event_subscriptions(false)).await.expect("reidentify");
+        assert_eq!(mock.last_subscriptions(), Some(u64::from(event_subscriptions(false).bits())));
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        // Kuras event yang sudah terlanjur dikirim, lalu pastikan tidak ada lagi.
+        while let Ok(Some(_)) = tokio::time::timeout(Duration::from_millis(30), events.next()).await {}
+        assert!(!next_meter(&mut events, &mut meter, 6_000).await);
+        assert!(client.general().version().await.is_ok(), "koneksi tetap hidup");
     }
 
     #[tokio::test]

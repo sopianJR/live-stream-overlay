@@ -22,6 +22,9 @@ use tokio_websockets::{CloseCode, Message, ServerBuilder};
 const CHALLENGE: &str = "bW9jay1jaGFsbGVuZ2U=";
 const SALT: &str = "bW9jay1zYWx0";
 const FPS: u64 = 60;
+/// Bit langganan event high-volume `InputVolumeMeters` (obs-websocket v5).
+const SUB_INPUT_VOLUME_METERS: u64 = 1 << 16;
+const METER_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Debug)]
 pub struct MockConfig {
@@ -35,12 +38,32 @@ pub struct MockConfig {
     pub verbose: bool,
     /// Input "Mic/Aux" mulai dalam keadaan mute.
     pub mic_muted: bool,
+    /// Level peak "Mic/Aux" dalam dBFS. `None` = tidak ada suara sama sekali (mic salah device).
+    pub mic_level_db: Option<f32>,
+    /// Peak mic sesekali menyentuh 0 dBFS (suara pecah).
+    pub mic_clip: bool,
+    /// Stream dihentikan (STOPPING → STOPPED) setelah sekian detik live.
+    pub stop_after_s: Option<u64>,
 }
 
 impl Default for MockConfig {
     fn default() -> Self {
-        Self { password: None, live: false, bitrate_kbps: 6000, drop_pct: 0.0, verbose: false, mic_muted: false }
+        Self {
+            password: None,
+            live: false,
+            bitrate_kbps: 6000,
+            drop_pct: 0.0,
+            verbose: false,
+            mic_muted: false,
+            mic_level_db: Some(-20.0),
+            mic_clip: false,
+            stop_after_s: None,
+        }
     }
+}
+
+fn db_to_mul(db: f32) -> f32 {
+    10f32.powf(db / 20.0)
 }
 
 struct Output {
@@ -63,6 +86,7 @@ struct World {
     /// Nama input → (jenis, mute).
     inputs: BTreeMap<String, (&'static str, bool)>,
     requests: Vec<String>,
+    subscriptions: Option<u64>,
 }
 
 fn uuid_for(name: &str) -> String {
@@ -77,6 +101,11 @@ fn timecode(ms: u64) -> String {
 
 fn event(ty: &str, data: Value) -> Value {
     json!({ "op": 5, "d": { "eventType": ty, "eventIntent": 0, "eventData": data } })
+}
+
+fn stop_stream_events(events: &mut Vec<Value>) {
+    events.push(output_event("StreamStateChanged", true, "STOPPING"));
+    events.push(output_event("StreamStateChanged", false, "STOPPED"));
 }
 
 fn output_event(ty: &str, active: bool, state: &str) -> Value {
@@ -104,6 +133,7 @@ impl World {
             current_scene: "Game".into(),
             inputs,
             requests: Vec::new(),
+            subscriptions: None,
         }
     }
 
@@ -238,8 +268,7 @@ impl World {
                     events.push(output_event("StreamStateChanged", true, "STARTED"));
                 } else {
                     self.stream.started = None;
-                    events.push(output_event("StreamStateChanged", true, "STOPPING"));
-                    events.push(output_event("StreamStateChanged", false, "STOPPED"));
+                    stop_stream_events(events);
                 }
                 Ok(if ty == "ToggleStream" { json!({ "outputActive": start }) } else { Value::Null })
             }
@@ -274,6 +303,30 @@ impl World {
             _ => Err((204, format!("Mock tidak mendukung request `{ty}`."))),
         }
     }
+
+    /// Event `InputVolumeMeters`: level per input aktif, dalam Mul (`[magnitude, peak, inputPeak]`).
+    fn volume_meters(&self, tick: u64) -> Value {
+        let inputs: Vec<Value> = self
+            .inputs
+            .iter()
+            .filter(|(_, (kind, _))| kind.contains("capture"))
+            .map(|(name, (_, muted))| {
+                let raw = if name == "Mic/Aux" {
+                    // Pecah: 1 dari 4 tick menyentuh 0 dBFS.
+                    if self.config.mic_clip && tick.is_multiple_of(4) {
+                        1.0
+                    } else {
+                        self.config.mic_level_db.map_or(0.0, db_to_mul)
+                    }
+                } else {
+                    db_to_mul(-30.0)
+                };
+                let post = if *muted { 0.0 } else { raw };
+                json!({ "inputName": name, "inputUuid": uuid_for(name), "inputLevelsMul": [[post * 0.7, post, raw], [post * 0.7, post, raw]] })
+            })
+            .collect();
+        event("InputVolumeMeters", json!({ "inputs": inputs }))
+    }
 }
 
 struct Shared {
@@ -305,6 +358,27 @@ impl MockObs {
         let task = tokio::spawn(async move {
             // JoinSet membatalkan semua koneksi saat task ini dihentikan.
             let mut conns = JoinSet::new();
+            let stop_after = accept_shared.world().config.stop_after_s;
+            if let Some(secs) = stop_after {
+                let shared = Arc::clone(&accept_shared);
+                conns.spawn(async move {
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        let mut events = Vec::new();
+                        {
+                            let mut w = shared.world();
+                            if w.stream.started.is_some_and(|t| t.elapsed() >= Duration::from_secs(secs)) {
+                                w.stream.started = None;
+                                stop_stream_events(&mut events);
+                                println!("[mock-obs] stream dihentikan otomatis setelah {secs} detik");
+                            }
+                        }
+                        for ev in events {
+                            let _ = shared.events.send(ev);
+                        }
+                    }
+                });
+            }
             while let Ok((stream, _)) = listener.accept().await {
                 let shared = Arc::clone(&accept_shared);
                 conns.spawn(async move {
@@ -341,6 +415,48 @@ impl MockObs {
     /// Mengubah persentase drop secara langsung (simulasi jaringan memburuk).
     pub fn set_drop_pct(&self, pct: f64) {
         self.shared.world().config.drop_pct = pct;
+    }
+
+    /// Level peak "Mic/Aux" (dBFS); `None` = senyap.
+    pub fn set_mic_level(&self, db: Option<f32>) {
+        self.shared.world().config.mic_level_db = db;
+    }
+
+    pub fn set_mic_clip(&self, clip: bool) {
+        self.shared.world().config.mic_clip = clip;
+    }
+
+    /// Stop stream seperti dari tombol OBS (STOPPING lalu STOPPED).
+    pub fn stop_stream(&self) {
+        let mut events = Vec::new();
+        {
+            let mut w = self.shared.world();
+            if w.stream.started.is_none() {
+                return;
+            }
+            w.stream.started = None;
+            stop_stream_events(&mut events);
+        }
+        for ev in events {
+            let _ = self.shared.events.send(ev);
+        }
+    }
+
+    /// Stream mati karena error (langsung STOPPED, tanpa STOPPING).
+    pub fn drop_stream(&self) {
+        {
+            let mut w = self.shared.world();
+            if w.stream.started.is_none() {
+                return;
+            }
+            w.stream.started = None;
+        }
+        let _ = self.shared.events.send(output_event("StreamStateChanged", false, "STOPPED"));
+    }
+
+    /// Langganan event klien terakhir yang identify/reidentify.
+    pub fn last_subscriptions(&self) -> Option<u64> {
+        self.shared.world().subscriptions
     }
 
     /// Menutup server dan semua koneksi (seperti OBS ditutup).
@@ -393,13 +509,23 @@ async fn serve(stream: TcpStream, shared: Arc<Shared>) -> Result<(), tokio_webso
     }
     ws.send(Message::text(json!({ "op": 2, "d": { "negotiatedRpcVersion": 1 } }).to_string()))
         .await?;
+    // Default obs-websocket bila tidak dikirim: semua event non-high-volume.
+    let mut subs = identify["d"]["eventSubscriptions"].as_u64().unwrap_or(0x7FF);
+    shared.world().subscriptions = Some(subs);
     if verbose {
         println!("[mock-obs] klien terhubung");
     }
 
     let mut events = shared.events.subscribe();
+    let mut meter = tokio::time::interval(METER_INTERVAL);
+    let mut meter_tick = 0u64;
     loop {
         tokio::select! {
+            _ = meter.tick(), if subs & SUB_INPUT_VOLUME_METERS != 0 => {
+                meter_tick += 1;
+                let ev = shared.world().volume_meters(meter_tick);
+                ws.send(Message::text(ev.to_string())).await?;
+            }
             msg = ws.next() => {
                 let Some(Ok(msg)) = msg else { break };
                 if msg.is_close() {
@@ -408,6 +534,19 @@ async fn serve(stream: TcpStream, shared: Arc<Shared>) -> Result<(), tokio_webso
                 let Some(req) = msg.as_text().and_then(|t| serde_json::from_str::<Value>(t).ok()) else {
                     continue;
                 };
+                if req["op"].as_u64() == Some(3) {
+                    // Reidentify: ganti langganan event tanpa memutus koneksi.
+                    if let Some(new_subs) = req["d"]["eventSubscriptions"].as_u64() {
+                        subs = new_subs;
+                        shared.world().subscriptions = Some(subs);
+                    }
+                    if verbose {
+                        println!("[mock-obs] reidentify, langganan {subs:#x}");
+                    }
+                    ws.send(Message::text(json!({ "op": 2, "d": { "negotiatedRpcVersion": 1 } }).to_string()))
+                        .await?;
+                    continue;
+                }
                 let d = &req["d"];
                 let ty = d["requestType"].as_str().unwrap_or_default().to_string();
                 let id = d["requestId"].clone();

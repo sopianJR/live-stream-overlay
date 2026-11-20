@@ -9,12 +9,12 @@
 
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::obs::StreamStop;
+use crate::obs::{MicAudio, StreamStop};
 use crate::settings::AlertSettings;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Level {
     Info,
@@ -82,6 +82,9 @@ pub struct Snapshot {
     pub render_lag_pct: Option<f64>,
     pub encode_lag_pct: Option<f64>,
     pub mic_muted: Option<bool>,
+    pub mic_name: Option<String>,
+    /// Level mic dari OBS; `None` jika tidak diketahui (langganan mati, OBS tidak mengirim).
+    pub mic_audio: Option<MicAudio>,
     pub last_stop: Option<StreamStop>,
     pub app_stop_at_ms: Option<u64>,
     pub chat: ChatHealth,
@@ -128,6 +131,10 @@ const ENCODE_LAG: Spec =
     Spec { id: "encodeLag", debounce_ms: 5_000, show_ms: 10_000, repeat_ms: Some(120_000), clear_ms: 10_000 };
 const MIC_MUTED: Spec =
     Spec { id: "micMuted", debounce_ms: 10_000, show_ms: 8_000, repeat_ms: Some(120_000), clear_ms: 0 };
+const MIC_SILENT: Spec =
+    Spec { id: "micSilent", debounce_ms: 0, show_ms: 10_000, repeat_ms: Some(300_000), clear_ms: 0 };
+const MIC_CLIPPING: Spec =
+    Spec { id: "micClipping", debounce_ms: 0, show_ms: 8_000, repeat_ms: Some(120_000), clear_ms: 10_000 };
 const CHAT_PROBLEM: Spec =
     Spec { id: "chatProblem", debounce_ms: 30_000, show_ms: 10_000, repeat_ms: Some(300_000), clear_ms: 0 };
 const TRAKTEER_LOST: Spec =
@@ -137,6 +144,8 @@ const CHAT_NOT_LIVE: Spec =
 
 pub const CONGESTION_THRESHOLD: f32 = 0.6;
 pub const LAG_THRESHOLD_PCT: f64 = 2.0;
+/// Suara mic pecah selama sekian detik (dari 10 detik terakhir) memicu peringatan.
+pub const CLIP_MIN_SECONDS: u32 = 3;
 /// Bitrate normal = rata-rata detik ke-10 s.d. ke-70 setelah live (lewati fase awal yang naik-turun).
 const BASELINE_WARMUP_MS: u64 = 10_000;
 const BASELINE_END_MS: u64 = 70_000;
@@ -195,6 +204,11 @@ impl Baseline {
     }
 }
 
+/// "2 menit", "90 detik".
+fn duration_text(secs: u32) -> String {
+    if secs >= 60 && secs.is_multiple_of(60) { format!("{} menit", secs / 60) } else { format!("{secs} detik") }
+}
+
 fn mbps(kbps: f64) -> String {
     format!("{:.1} Mbps", kbps / 1000.0)
 }
@@ -207,6 +221,8 @@ pub struct Engine {
     /// Polling melihat stream mati; menunggu event STOPPED untuk tahu penyebabnya.
     pending_stop: Option<u64>,
     baseline: Baseline,
+    /// Sejak kapan live dengan mic tidak mute; diam sebelum itu tidak dihitung.
+    mic_open_since: Option<u64>,
     seq: u64,
 }
 
@@ -269,6 +285,11 @@ impl Engine {
             alert: Alert { id: id.into(), level: c.level, title: c.title, detail: c.detail, raised_at_ms: t, seq },
             expires_at: ttl_ms.map(|ttl| t + ttl),
         });
+    }
+
+    /// Info singkat dari servis lain (mis. "Stream selesai"), hilang sendiri.
+    pub fn raise_info(&mut self, id: &str, title: String, detail: Option<String>, t: u64, ttl_ms: u64) {
+        self.raise_event(id, Content { level: Level::Info, title, detail }, t, Some(ttl_ms));
     }
 
     fn clear_event(&mut self, id: &str) {
@@ -385,6 +406,7 @@ impl Engine {
             self.rules.clear();
             self.pending_stop = None;
             self.baseline = Baseline::default();
+            self.mic_open_since = None;
             self.prev = Some(s.clone());
             return self.finish(before);
         }
@@ -498,6 +520,7 @@ impl Engine {
             Content::new(Level::Reminder, "Mic masih mute!", "Penonton tidak bisa mendengar suara Anda.")
         });
         self.drive(MIC_MUTED, t, mic);
+        self.mic_levels(s, cfg, live);
 
         let (chat_problem, chat_not_live) = match &s.chat {
             ChatHealth::Problem(msg) if live => (
@@ -533,6 +556,47 @@ impl Engine {
 
         self.prev = Some(s.clone());
         self.finish(before)
+    }
+
+    /// "Mic tidak terdengar" dan "Suara mic pecah", dari level mic OBS.
+    fn mic_levels(&mut self, s: &Snapshot, cfg: &AlertSettings, live: bool) {
+        let t = s.t_ms;
+        let open = live && s.mic_muted == Some(false);
+        if !open {
+            self.mic_open_since = None;
+        }
+        let open_since = open.then(|| *self.mic_open_since.get_or_insert(t));
+        let audio = s.mic_audio.filter(|a| a.known);
+        let name = s.mic_name.as_deref().unwrap_or("mic");
+
+        let silent = match (open_since, audio) {
+            (Some(since), Some(a)) if cfg.mic_silence_s > 0 => {
+                let silent_ms = a.silent_for_ms.min(t.saturating_sub(since));
+                (silent_ms >= u64::from(cfg.mic_silence_s) * 1000).then(|| {
+                    Content::new(
+                        Level::Warning,
+                        "Mic tidak terdengar",
+                        &format!(
+                            "{} tanpa suara dari \"{name}\". Cek device mic di OBS. Abaikan jika Anda \
+                             memang sedang diam.",
+                            duration_text(cfg.mic_silence_s)
+                        ),
+                    )
+                })
+            }
+            _ => None,
+        };
+        self.drive(MIC_SILENT, t, silent);
+
+        let clipping = match (open_since, audio) {
+            (Some(_), Some(a)) if cfg.mic_clipping && a.clip_seconds >= CLIP_MIN_SECONDS => Some(Content::new(
+                Level::Warning,
+                "Suara mic pecah (terlalu keras)",
+                "Turunkan gain mic atau tambahkan filter Limiter di OBS.",
+            )),
+            _ => None,
+        };
+        self.drive(MIC_CLIPPING, t, clipping);
     }
 
     fn finish(&self, before: Vec<Alert>) -> Tick {
@@ -762,6 +826,100 @@ mod tests {
         let mut e = Engine::default();
         let raised = run(&mut e, 0, 60 * SEC, |t| Snapshot { live: false, mic_muted: Some(true), ..live(t) });
         assert!(raised.is_empty());
+    }
+
+    fn mic(silent_for_s: u64, clip_seconds: u32) -> Option<MicAudio> {
+        Some(MicAudio { known: true, silent_for_ms: silent_for_s * SEC, clip_seconds, peak_db: None })
+    }
+
+    #[test]
+    fn mic_silence_after_two_minutes_of_live() {
+        let mut e = Engine::default();
+        // Mic sudah diam lama sebelum live: hitungan mulai saat live (t = 0).
+        let silent = |t: u64| Snapshot { mic_audio: mic(600 + t / SEC, 0), mic_name: Some("Mic/Aux".into()), ..live(t) };
+        let raised = run(&mut e, 0, 121 * SEC, silent);
+        let times: Vec<u64> = raised.iter().map(|a| a.raised_at_ms / SEC).collect();
+        assert_eq!(times, vec![120]);
+        assert_eq!(raised[0].id, "micSilent");
+        assert_eq!(raised[0].level, Level::Warning);
+        assert!(raised[0].detail.as_deref().unwrap().contains("2 menit tanpa suara dari \"Mic/Aux\""));
+
+        // Tetap diam: diulang tiap 5 menit.
+        let raised = run(&mut e, 121 * SEC, 421 * SEC, silent);
+        assert_eq!(raised.iter().map(|a| a.raised_at_ms / SEC).collect::<Vec<_>>(), vec![420]);
+
+        // Ada suara: hilang, dan butuh 2 menit diam lagi.
+        e.tick(&Snapshot { mic_audio: mic(0, 0), ..live(421 * SEC) }, &cfg());
+        assert!(!ids(&e).contains(&"micSilent".to_string()));
+        let raised = run(&mut e, 422 * SEC, 541 * SEC, |t| Snapshot { mic_audio: mic((t - 421 * SEC) / SEC, 0), ..live(t) });
+        assert!(raised.is_empty(), "{raised:?}");
+        let raised = run(&mut e, 541 * SEC, 542 * SEC, |t| Snapshot { mic_audio: mic((t - 421 * SEC) / SEC, 0), ..live(t) });
+        assert_eq!(raised.len(), 1);
+    }
+
+    #[test]
+    fn mic_silence_needs_live_unmuted_known_and_enabled() {
+        type Case = (&'static str, Box<dyn Fn(u64) -> Snapshot>, AlertSettings);
+        let cases: [Case; 5] = [
+            ("offline", Box::new(|t| Snapshot { live: false, mic_audio: mic(999, 0), ..live(t) }), cfg()),
+            ("mute", Box::new(|t| Snapshot { mic_muted: Some(true), mic_audio: mic(999, 0), ..live(t) }), cfg()),
+            (
+                "tidak diketahui",
+                Box::new(|t| Snapshot {
+                    mic_audio: Some(MicAudio { known: false, ..mic(999, 0).unwrap() }),
+                    ..live(t)
+                }),
+                cfg(),
+            ),
+            ("mati", Box::new(|t| Snapshot { mic_audio: mic(999, 0), ..live(t) }), AlertSettings { mic_silence_s: 0, ..cfg() }),
+            ("alert dimatikan", Box::new(|t| Snapshot { mic_audio: mic(999, 0), ..live(t) }), AlertSettings { enabled: false, ..cfg() }),
+        ];
+        for (name, f, settings) in cases {
+            let mut e = Engine::default();
+            let mut raised = Vec::new();
+            for t in 0..300 {
+                raised.extend(e.tick(&f(t * SEC), &settings).raised);
+            }
+            assert!(raised.iter().all(|a| a.id != "micSilent"), "{name}: {raised:?}");
+        }
+
+        // Baru di-unmute: diam sebelum unmute tidak dihitung.
+        let mut e = Engine::default();
+        let raised = run(&mut e, 0, 200 * SEC, |t| Snapshot {
+            mic_muted: Some(t < 100 * SEC),
+            mic_audio: mic(999, 0),
+            ..live(t)
+        });
+        let silent: Vec<u64> = raised.iter().filter(|a| a.id == "micSilent").map(|a| a.raised_at_ms / SEC).collect();
+        assert!(silent.is_empty(), "{silent:?}");
+        let raised = run(&mut e, 200 * SEC, 221 * SEC, |t| Snapshot { mic_audio: mic(999, 0), ..live(t) });
+        assert_eq!(raised.iter().map(|a| a.raised_at_ms / SEC).collect::<Vec<_>>(), vec![220]);
+
+        // Ambang mengikuti pengaturan.
+        let mut e = Engine::default();
+        let fast = AlertSettings { mic_silence_s: 30, ..cfg() };
+        let mut raised = Vec::new();
+        for t in 0..31 {
+            raised.extend(e.tick(&Snapshot { mic_audio: mic(999, 0), ..live(t * SEC) }, &fast).raised);
+        }
+        assert_eq!(raised.len(), 1);
+        assert!(raised[0].detail.as_deref().unwrap().starts_with("30 detik"));
+    }
+
+    #[test]
+    fn mic_clipping_warns_and_repeats() {
+        let mut e = Engine::default();
+        let clip = |n: u32| move |t| Snapshot { mic_audio: mic(0, n), ..live(t) };
+        assert!(run(&mut e, 0, 10 * SEC, clip(2)).is_empty(), "2 detik pecah belum cukup");
+        let raised = run(&mut e, 10 * SEC, 140 * SEC, clip(3));
+        assert_eq!(raised.iter().map(|a| a.raised_at_ms / SEC).collect::<Vec<_>>(), vec![10, 130]);
+        assert_eq!(raised[0].id, "micClipping");
+
+        let mut e = Engine::default();
+        let off = AlertSettings { mic_clipping: false, ..cfg() };
+        for t in 0..60 {
+            assert!(e.tick(&Snapshot { mic_audio: mic(0, 10), ..live(t * SEC) }, &off).raised.is_empty());
+        }
     }
 
     #[test]

@@ -26,6 +26,8 @@ pub const LOW_BITRATE_PCT_RANGE: (u32, u32) = (10, 90);
 /// 0 = alert CPU dimatikan.
 pub const CPU_PCT_RANGE: (u32, u32) = (50, 100);
 pub const TRAKTEER_ALERT_SECONDS_RANGE: (u32, u32) = (3, 60);
+/// 0 = alert mic diam dimatikan.
+pub const MIC_SILENCE_S_RANGE: (u32, u32) = (30, 900);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -168,6 +170,10 @@ pub struct AlertSettings {
     pub cpu_pct: u32,
     /// Ingatkan tiap 2 menit jika mic masih mute saat live.
     pub mic_reminder: bool,
+    /// Peringatan jika mic (tidak mute) tanpa suara selama sekian detik saat live. 0 = mati.
+    pub mic_silence_s: u32,
+    /// Peringatan jika suara mic pecah (peak menyentuh 0 dBFS) berulang kali.
+    pub mic_clipping: bool,
 }
 
 impl Default for AlertSettings {
@@ -179,6 +185,8 @@ impl Default for AlertSettings {
             low_bitrate_pct: 50,
             cpu_pct: 90,
             mic_reminder: true,
+            mic_silence_s: 120,
+            mic_clipping: true,
         }
     }
 }
@@ -196,6 +204,7 @@ impl AlertSettings {
             clamp_f64(self.dropped_critical_pct, DROPPED_PCT_RANGE, d.dropped_critical_pct);
         self.low_bitrate_pct = clamp_or_off(self.low_bitrate_pct, LOW_BITRATE_PCT_RANGE);
         self.cpu_pct = clamp_or_off(self.cpu_pct, CPU_PCT_RANGE);
+        self.mic_silence_s = clamp_or_off(self.mic_silence_s, MIC_SILENCE_S_RANGE);
     }
 
     fn validate(&mut self) -> Result<(), Vec<String>> {
@@ -236,6 +245,27 @@ impl TrakteerSettings {
     }
 }
 
+impl AlertSettings {
+    /// Aturan level mic butuh event level audio (high-volume) dari OBS.
+    pub fn wants_mic_levels(&self) -> bool {
+        self.enabled && (self.mic_silence_s > 0 || self.mic_clipping)
+    }
+}
+
+/// Ringkasan sesi stream (lihat `session/`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SessionSettings {
+    /// Buka dashboard di tab Riwayat setelah stream selesai.
+    pub open_on_end: bool,
+}
+
+impl Default for SessionSettings {
+    fn default() -> Self {
+        Self { open_on_end: true }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
@@ -245,6 +275,7 @@ pub struct AppSettings {
     pub hotkeys: HotkeySettings,
     pub alerts: AlertSettings,
     pub trakteer: TrakteerSettings,
+    pub session: SessionSettings,
 }
 
 impl AppSettings {
@@ -456,12 +487,32 @@ mod tests {
         assert_eq!(v.alerts.dropped_warn_pct, DROPPED_PCT_RANGE.0);
         assert_eq!(v.alerts.low_bitrate_pct, LOW_BITRATE_PCT_RANGE.0);
         assert_eq!(v.alerts.cpu_pct, 0, "0 = dimatikan");
+        assert_eq!(v.alerts.mic_silence_s, 120);
+
+        let mut s = AppSettings::default();
+        s.alerts.mic_silence_s = 5;
+        assert_eq!(s.clone().validated().unwrap().alerts.mic_silence_s, MIC_SILENCE_S_RANGE.0);
+        s.alerts.mic_silence_s = 0;
+        s.alerts.mic_clipping = false;
+        let v = s.validated().unwrap();
+        assert_eq!(v.alerts.mic_silence_s, 0, "0 = dimatikan");
+        assert!(!v.alerts.wants_mic_levels());
+        assert!(AppSettings::default().alerts.wants_mic_levels());
 
         let mut s = AppSettings::default();
         s.alerts.dropped_warn_pct = 8.0;
         s.alerts.dropped_critical_pct = 3.0;
         assert!(s.clone().validated().unwrap_err()[0].contains("kritis"));
         assert_eq!(s.repaired().alerts.dropped_critical_pct, 8.0);
+    }
+
+    #[test]
+    fn old_settings_get_session_defaults() {
+        let s: AppSettings = serde_json::from_str(r#"{"alerts":{"micReminder":false}}"#).unwrap();
+        assert!(s.session.open_on_end);
+        assert_eq!(s.alerts.mic_silence_s, 120);
+        assert!(s.alerts.mic_clipping);
+        assert!(!s.alerts.mic_reminder);
     }
 
     #[test]

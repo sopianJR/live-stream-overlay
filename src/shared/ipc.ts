@@ -5,6 +5,9 @@ import type {
   Alert,
   AppSettings,
   DonationEvent,
+  MicAudio,
+  SessionState,
+  SessionSummary,
   TrakteerKeyStatus,
   TrakteerSnapshot,
   TrakteerStatus,
@@ -28,6 +31,7 @@ export const ALERT_UPDATE_EVENT = "alert://update";
 export const ACCOUNT_STATUS_EVENT = "account://status";
 export const TRAKTEER_STATUS_EVENT = "trakteer://status";
 export const TRAKTEER_DONATION_EVENT = "trakteer://donation";
+export const SESSION_SUMMARY_EVENT = "session://summary";
 export const TRAKTEER_RECENT_EVENT = "trakteer://recent";
 
 export const ipc = {
@@ -59,6 +63,8 @@ export const ipc = {
   // OBS
   obsGetStatus: () => invoke<ObsStatus>("obs_get_status"),
   obsReconnect: () => invoke<void>("obs_reconnect"),
+  /** Level mic terkini (meter "Tes mic"). */
+  obsMicLevel: () => invoke<MicAudio>("obs_mic_level"),
   obsStartStream: () => invoke<void>("obs_start_stream"),
   /** Tanpa konfirmasi di sisi Rust: UI wajib meminta konfirmasi (tahan tombol) dulu. */
   obsStopStream: () => invoke<void>("obs_stop_stream"),
@@ -93,6 +99,12 @@ export const ipc = {
   trakteerReconnect: () => invoke<void>("trakteer_reconnect"),
   /** Donasi contoh di overlay (tidak masuk riwayat). */
   trakteerTestDonation: () => invoke<void>("trakteer_test_donation"),
+
+  // Ringkasan sesi
+  /** `takeFocus`: ambil penanda "tampilkan sesi yang baru selesai" (sekali saja). */
+  sessionGetState: (takeFocus = false) => invoke<SessionState>("session_get_state", { takeFocus }),
+  sessionDelete: (id: string) => invoke<SessionState>("session_delete", { id }),
+  sessionClear: () => invoke<SessionState>("session_clear"),
 
   // Alert
   alertsGet: () => invoke<Alert[]>("alerts_get"),
@@ -139,6 +151,10 @@ export function onTrakteerStatus(cb: (status: TrakteerStatus) => void): Promise<
 
 export function onTrakteerDonation(cb: (event: DonationEvent) => void): Promise<UnlistenFn> {
   return listen<DonationEvent>(TRAKTEER_DONATION_EVENT, (e) => cb(e.payload));
+}
+
+export function onSessionSummary(cb: (summary: SessionSummary) => void): Promise<UnlistenFn> {
+  return listen<SessionSummary>(SESSION_SUMMARY_EVENT, (e) => cb(e.payload));
 }
 
 export function onTrakteerRecent(cb: (recent: DonationEvent[]) => void): Promise<UnlistenFn> {

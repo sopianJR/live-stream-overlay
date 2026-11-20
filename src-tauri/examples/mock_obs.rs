@@ -2,7 +2,12 @@
 //!
 //! ```text
 //! cargo run --example mock_obs -- [--port 4455] [--password RAHASIA] [--live] [--drop 2.5] [--kbps 6000] [--mic-muted]
+//!     [--mic-db -20 | --mic-silent] [--mic-clip] [--stop-after 180]
 //! ```
+//!
+//! - `--mic-silent`: mic tanpa suara sama sekali (uji alert "Mic tidak terdengar").
+//! - `--mic-clip`: peak mic sesekali 0 dBFS (uji alert "Suara mic pecah").
+//! - `--stop-after N`: stream dihentikan seperti dari OBS setelah N detik live (uji ringkasan sesi).
 //!
 //! Lalu arahkan dashboard → Koneksi ke `127.0.0.1` dan port yang sama.
 
@@ -24,6 +29,14 @@ fn parse_args() -> Result<(u16, MockConfig), String> {
             "--mic-muted" => config.mic_muted = true,
             "--drop" => config.drop_pct = value("--drop")?.parse().map_err(|e| format!("--drop: {e}"))?,
             "--kbps" => config.bitrate_kbps = value("--kbps")?.parse().map_err(|e| format!("--kbps: {e}"))?,
+            "--mic-db" => {
+                config.mic_level_db = Some(value("--mic-db")?.parse().map_err(|e| format!("--mic-db: {e}"))?)
+            }
+            "--mic-silent" => config.mic_level_db = None,
+            "--mic-clip" => config.mic_clip = true,
+            "--stop-after" => {
+                config.stop_after_s = Some(value("--stop-after")?.parse().map_err(|e| format!("--stop-after: {e}"))?)
+            }
             other => return Err(format!("argumen tidak dikenal: {other}")),
         }
     }

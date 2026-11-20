@@ -171,6 +171,7 @@ fn publish(app: &AppHandle, update: ChatUpdate) {
 
 fn apply(app: &AppHandle, actions: Vec<ChatAction>) {
     let update = app.state::<ChatService>().lock().buffer.apply(actions);
+    crate::session::on_chat(app, &update.upserts);
     publish(app, update);
 }
 
