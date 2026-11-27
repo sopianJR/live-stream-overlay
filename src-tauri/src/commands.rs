@@ -148,7 +148,7 @@ pub fn obs_get_status(obs: State<'_, ObsService>) -> ObsStatus {
 /// Level mic terkini untuk meter "Tes mic" di dashboard.
 #[tauri::command]
 pub fn obs_mic_level(obs: State<'_, ObsService>) -> MicAudio {
-    obs.mic_audio()
+    obs.mic_audio_for_meter()
 }
 
 #[tauri::command]

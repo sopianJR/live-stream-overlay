@@ -22,6 +22,22 @@ const DASHBOARD_LABEL: &str = "main";
 /// Membuka dashboard. Saat ditutup, dashboard dihancurkan (bukan disembunyikan) agar
 /// renderer WebView2-nya tidak memakan RAM selama bermain game; dibuat ulang di sini.
 pub(crate) fn show_dashboard(app: &AppHandle) {
+    let Some(win) = dashboard_window(app, true) else { return };
+    let _ = win.show();
+    let _ = win.unminimize();
+    let _ = win.set_focus();
+}
+
+/// Menampilkan dashboard tanpa mengambil fokus (mis. ringkasan setelah stream selesai),
+/// agar game yang sedang dimainkan tidak kehilangan input.
+pub(crate) fn show_dashboard_inactive(app: &AppHandle) {
+    let Some(win) = dashboard_window(app, false) else { return };
+    overlay::show_window_inactive(&win);
+}
+
+/// Dashboard yang ada, atau dibuat ulang dari konfigurasi (`focus = false`: tersembunyi
+/// dan tanpa fokus sampai ditampilkan oleh pemanggil).
+fn dashboard_window(app: &AppHandle, focus: bool) -> Option<tauri::WebviewWindow> {
     let win = match app.get_webview_window(DASHBOARD_LABEL) {
         Some(win) => win,
         None => {
@@ -32,19 +48,20 @@ pub(crate) fn show_dashboard(app: &AppHandle) {
                 .iter()
                 .find(|w| w.label == DASHBOARD_LABEL)
                 .cloned();
-            let Some(config) = config else { return };
-            match WebviewWindowBuilder::from_config(app, &config).and_then(|b| b.build()) {
+            let config = config?;
+            let built = WebviewWindowBuilder::from_config(app, &config)
+                .map(|b| if focus { b } else { b.visible(false).focused(false) })
+                .and_then(|b| b.build());
+            match built {
                 Ok(win) => win,
                 Err(e) => {
                     log::warn!("gagal membuat ulang dashboard: {e}");
-                    return;
+                    return None;
                 }
             }
         }
     };
-    let _ = win.show();
-    let _ = win.unminimize();
-    let _ = win.set_focus();
+    Some(win)
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {

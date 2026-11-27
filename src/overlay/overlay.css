@@ -152,7 +152,9 @@ body,
   border-radius: 50%;
   background: var(--live);
   box-shadow: 0 0 8px var(--live);
-  animation: pulse 1.6s ease-in-out infinite;
+  /* Berkedip sebentar saat mulai live, lalu diam: animasi tanpa henti membuat overlay
+     seukuran layar dirender ulang setiap frame di atas game. */
+  animation: pulse 1.6s ease-in-out 3;
 }
 
 @keyframes pulse {
@@ -580,12 +582,21 @@ body,
   animation: alert-in 0.25s ease-out;
 }
 .alert.critical {
+  position: relative;
   background: rgba(185, 28, 28, 0.94);
   border-color: #fecaca;
   color: #fff;
-  animation:
-    alert-in 0.25s ease-out,
-    alert-pulse 1.6s ease-in-out infinite;
+}
+/* Cincin merah berdenyut 6× (±10 detik) lewat opacity saja (tanpa repaint box-shadow), lalu diam. */
+.alert.critical::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  animation: alert-pulse 1.6s ease-in-out 6;
 }
 .alert.warning {
   background: rgba(250, 204, 21, 0.95);
@@ -662,7 +673,16 @@ body,
 
 @keyframes alert-pulse {
   50% {
-    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.45), 0 6px 18px rgba(0, 0, 0, 0.35);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot,
+  .alert,
+  .alert.critical::after,
+  .notice {
+    animation: none;
   }
 }
 

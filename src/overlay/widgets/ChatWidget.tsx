@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CHAT_STATE_LABEL, formatViewers } from "../../shared/format";
 import { ipc } from "../../shared/ipc";
 import type { ChatAuthor, ChatMessage, ChatRun, ChatStatus } from "../../shared/types";
@@ -11,20 +11,30 @@ type Mention = ((name: string) => void) | undefined;
 
 /** Pesan yang dirender; buffer menyimpan lebih banyak untuk dibuka ulang. */
 const RENDER_LIMIT = 50;
+/** Dianggap "di bawah" jika jarak ke dasar chat kurang dari ini (px). */
+const STICK_PX = 40;
 
-function Runs({ runs }: { runs: ChatRun[] }) {
+const Runs = memo(function Runs({ runs }: { runs: ChatRun[] }) {
   return (
     <>
       {runs.map((r, i) =>
         r.type === "text" ? (
           <span key={i}>{r.text}</span>
         ) : (
-          <img key={i} className="emoji" src={r.url} alt={r.alt} title={r.alt} draggable={false} />
+          <img
+            key={i}
+            className="emoji"
+            src={r.url}
+            alt={r.alt}
+            title={r.alt}
+            draggable={false}
+            decoding="async"
+          />
         ),
       )}
     </>
   );
-}
+});
 
 function roleClass(a: ChatAuthor): string {
   if (a.owner) return "role-owner";
@@ -70,7 +80,8 @@ function AuthorName({ author, onMention }: { author: ChatAuthor; onMention?: Men
   );
 }
 
-function ChatItem({ m, onMention }: { m: ChatMessage; onMention?: Mention }) {
+/** Memo: pesan yang tidak berubah mempertahankan referensi objeknya (lihat `applyChatUpdate`). */
+const ChatItem = memo(function ChatItem({ m, onMention }: { m: ChatMessage; onMention?: Mention }) {
   switch (m.kind) {
     case "superChat":
     case "superSticker": {
@@ -139,7 +150,7 @@ function ChatItem({ m, onMention }: { m: ChatMessage; onMention?: Mention }) {
         </div>
       );
   }
-}
+});
 
 /** Baris status di atas chat: selalu di mode edit, di mode pasif hanya saat belum tersambung. */
 function StatusLine({ status, editMode }: { status: ChatStatus; editMode: boolean }) {
@@ -181,18 +192,27 @@ export function ChatWidget({ editMode }: { editMode: boolean }) {
     (name: string) => setMention((prev) => ({ text: `${name} `, seq: (prev?.seq ?? 0) + 1 })),
     [],
   );
-  const shown = messages.length > RENDER_LIMIT ? messages.slice(-RENDER_LIMIT) : messages;
-
-  // Selalu ikuti pesan terbaru (di mode edit chat bisa di-scroll).
-  useEffect(() => {
+  const shown = useMemo(
+    () => (messages.length > RENDER_LIMIT ? messages.slice(-RENDER_LIMIT) : messages),
+    [messages],
+  );
+  // Di mode edit chat bisa di-scroll: pesan baru hanya menggulir jika user sedang di bawah.
+  const stick = useRef(true);
+  const onScroll = () => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+  };
+
+  useEffect(() => {
+    if (!editMode) stick.current = true;
+    const el = listRef.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [shown, editMode]);
 
   return (
     <div className="chat-wrap">
       {status && <StatusLine status={status} editMode={editMode} />}
-      <div className="chat" ref={listRef}>
+      <div className="chat" ref={listRef} onScroll={onScroll}>
         {shown.map((m) => (
           <ChatItem key={m.id} m={m} onMention={editMode ? onMention : undefined} />
         ))}

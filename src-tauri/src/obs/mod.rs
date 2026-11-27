@@ -4,7 +4,8 @@
 //! - menghubungkan, lalu mencoba ulang dengan backoff (1, 2, 4, 8, kemudian tiap 10 detik);
 //! - berhenti mencoba saat password salah, sampai pengaturan atau password diubah;
 //! - polling statistik tiap detik dan mendengarkan event (stream, rekaman, scene, mic);
-//! - jika aturan level mic aktif, mendengarkan event level audio 20×/detik (`audio.rs`);
+//! - jika aturan level mic aktif, mendengarkan event level audio 20×/detik (`audio.rs`),
+//!   hanya selama live atau selama meter "Tes mic" di dashboard terbuka;
 //! - menyiarkan [`ObsStatus`] ke semua window lewat event `obs://status`.
 //!
 //! Command kontrol (start/stop stream, rekaman, mic, scene) memakai klien yang sama.
@@ -51,13 +52,15 @@ const MAX_BACKOFF: Duration = Duration::from_secs(10);
 /// Kode close obs-websocket untuk autentikasi gagal (password salah / tidak dikirim).
 const CLOSE_AUTH_FAILED: u16 = 4009;
 const CLOSE_UNSUPPORTED_RPC: u16 = 4010;
+/// Meter "Tes mic" dianggap tertutup jika tidak diminta selama ini.
+const METER_DEMAND: Duration = Duration::from_secs(3);
 
 enum Control {
     /// Pengaturan atau password berubah, atau user menekan "Hubungkan ulang".
     Reconnect,
     /// Input mic yang dipilih berubah; cukup dibaca ulang tanpa memutus koneksi.
     RefreshMic,
-    /// Aturan level mic dinyalakan/dimatikan; langganan event diperbarui (Reidentify).
+    /// Kebutuhan level mic berubah (aturan, live, meter dashboard); langganan diperbarui (Reidentify).
     Resubscribe,
 }
 
@@ -66,6 +69,10 @@ struct Shared {
     client: Option<Arc<Client>>,
     /// Di luar `status` agar event level 20×/detik tidak memicu emit `obs://status`.
     meter: MicMeter,
+    /// Langganan level mic yang sedang aktif di koneksi ini.
+    meters_on: bool,
+    /// Meter "Tes mic" di dashboard terakhir meminta level sampai saat ini.
+    meter_demand_until: Option<Instant>,
 }
 
 pub struct ObsService {
@@ -101,6 +108,20 @@ impl ObsService {
         self.lock().meter.audio(now)
     }
 
+    /// Untuk meter "Tes mic": level juga dilanggan saat tidak live, selama meter terbuka.
+    pub fn mic_audio_for_meter(&self) -> MicAudio {
+        let now = self.now_ms();
+        let (audio, subscribe) = {
+            let mut shared = self.lock();
+            shared.meter_demand_until = Some(Instant::now() + METER_DEMAND);
+            (shared.meter.audio(now), !shared.meters_on && shared.client.is_some())
+        };
+        if subscribe {
+            self.resubscribe();
+        }
+        audio
+    }
+
     fn client(&self) -> Result<Arc<Client>, String> {
         self.lock().client.clone().ok_or_else(|| "OBS belum terhubung.".to_string())
     }
@@ -131,6 +152,8 @@ pub fn init(app: &AppHandle) {
             status: ObsStatus::new(endpoint(&settings)),
             client: None,
             meter: MicMeter::default(),
+            meters_on: false,
+            meter_demand_until: None,
         }),
         control,
         epoch: Instant::now(),
@@ -231,8 +254,15 @@ fn event_subscriptions(mic_levels: bool) -> EventSubscription {
     if mic_levels { base | EventSubscription::INPUT_VOLUME_METERS } else { base }
 }
 
-fn wanted_subscriptions(app: &AppHandle) -> EventSubscription {
-    event_subscriptions(app.state::<SettingsState>().get().alerts.wants_mic_levels())
+/// Level mic (20 event/detik) hanya perlu saat live (alert mic) atau saat meter dashboard terbuka.
+fn wants_meters(app: &AppHandle) -> bool {
+    if !app.state::<SettingsState>().get().alerts.wants_mic_levels() {
+        return false;
+    }
+    let svc = app.state::<ObsService>();
+    let shared = svc.lock();
+    let live = shared.status.stream.active;
+    live || shared.meter_demand_until.is_some_and(|until| Instant::now() < until)
 }
 
 async fn connect(
@@ -302,11 +332,13 @@ async fn run(app: AppHandle, mut rx: mpsc::UnboundedReceiver<Control>) {
             true
         });
 
-        let delay = match connect(&settings, password.as_deref(), &target, wanted_subscriptions(&app)).await {
+        let meters = wants_meters(&app);
+        let delay = match connect(&settings, password.as_deref(), &target, event_subscriptions(meters)).await {
             Ok(client) => {
                 attempt = 0;
                 last_logged = None;
                 log::info!("terhubung ke OBS di {target}");
+                app.state::<ObsService>().lock().meters_on = meters;
                 match session(&app, Arc::new(client), &settings, &mut rx).await {
                     SessionEnd::Reconnect => continue,
                     SessionEnd::Shutdown => return,
@@ -460,6 +492,10 @@ async fn session(
                         status::apply_poll(s, &mut tracker, t, &sample);
                         true
                     });
+                    // Mulai/berhenti live atau meter dashboard ditutup: sesuaikan langganan level mic.
+                    if let Err(end) = sync_meters(app, &client).await {
+                        break end;
+                    }
                 }
             },
             event = events.next() => {
@@ -500,18 +536,8 @@ async fn session(
                     });
                 }
                 Some(Control::Resubscribe) => {
-                    let subs = wanted_subscriptions(app);
-                    match tokio::time::timeout(POLL_TIMEOUT, client.reidentify(subs)).await {
-                        Ok(Ok(())) => {
-                            log::info!(
-                                "langganan level mic OBS {}",
-                                if subs.contains(EventSubscription::INPUT_VOLUME_METERS) { "aktif" } else { "mati" }
-                            );
-                            svc.lock().meter.reset();
-                        }
-                        Ok(Err(e)) if is_disconnect(&e) => break SessionEnd::Lost("Koneksi ke OBS terputus.".into()),
-                        Ok(Err(e)) => log::warn!("gagal memperbarui langganan event OBS: {e}"),
-                        Err(_) => break SessionEnd::Lost("OBS tidak merespons.".into()),
+                    if let Err(end) = sync_meters(app, &client).await {
+                        break end;
                     }
                 }
                 None => break SessionEnd::Shutdown,
@@ -522,9 +548,34 @@ async fn session(
     {
         let mut shared = svc.lock();
         shared.client = None;
+        shared.meters_on = false;
         shared.meter.reset();
     }
     end
+}
+
+/// Menyamakan langganan level mic dengan kebutuhan saat ini (Reidentify, tanpa memutus koneksi).
+async fn sync_meters(app: &AppHandle, client: &Client) -> Result<(), SessionEnd> {
+    let want = wants_meters(app);
+    let svc = app.state::<ObsService>();
+    if svc.lock().meters_on == want {
+        return Ok(());
+    }
+    match tokio::time::timeout(POLL_TIMEOUT, client.reidentify(event_subscriptions(want))).await {
+        Ok(Ok(())) => {
+            log::debug!("langganan level mic OBS {}", if want { "aktif" } else { "mati" });
+            let mut shared = svc.lock();
+            shared.meters_on = want;
+            shared.meter.reset();
+            Ok(())
+        }
+        Ok(Err(e)) if is_disconnect(&e) => Err(SessionEnd::Lost("Koneksi ke OBS terputus.".into())),
+        Ok(Err(e)) => {
+            log::warn!("gagal memperbarui langganan event OBS: {e}");
+            Ok(())
+        }
+        Err(_) => Err(SessionEnd::Lost("OBS tidak merespons.".into())),
+    }
 }
 
 // ---------- Kontrol ----------

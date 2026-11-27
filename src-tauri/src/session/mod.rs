@@ -188,6 +188,14 @@ fn on_session_end(app: &AppHandle, s: &SessionSummary) {
         _ => "dihentikan",
     };
     log::info!("sesi stream selesai ({reason}), durasi {}", duration_text(s.duration_ms));
+    // Hanya stop yang disengaja: stream yang putus bisa terjadi saat streamer masih bermain.
+    let open = app.state::<SettingsState>().get().session.open_on_end
+        && s.end_reason == Some(EndReason::Stopped)
+        && s.duration_ms >= OPEN_MIN_MS;
+    if open {
+        // Diset sebelum event agar dashboard yang sedang terbuka tahu harus pindah tab.
+        app.state::<SessionService>().lock().focus = Some(s.id.clone());
+    }
     if let Err(e) = app.emit(SUMMARY_EVENT, s) {
         log::warn!("gagal emit ringkasan sesi: {e}");
     }
@@ -198,11 +206,10 @@ fn on_session_end(app: &AppHandle, s: &SessionSummary) {
         Some("Ringkasan sesi ada di dashboard → Riwayat.".into()),
         15_000,
     );
-    let open = app.state::<SettingsState>().get().session.open_on_end;
-    if open && s.duration_ms >= OPEN_MIN_MS {
-        app.state::<SessionService>().lock().focus = Some(s.id.clone());
+    if open {
         let handle = app.clone();
-        if let Err(e) = app.run_on_main_thread(move || crate::show_dashboard(&handle)) {
+        // Tanpa mengambil fokus: streamer bisa saja masih di dalam game.
+        if let Err(e) = app.run_on_main_thread(move || crate::show_dashboard_inactive(&handle)) {
             log::warn!("gagal membuka dashboard: {e}");
         }
     }

@@ -75,7 +75,15 @@ export default function App() {
         if (s.focusId) setTab("history");
       })
       .catch(() => {});
-    const unlisten = onSessionSummary(() => setTab("history"));
+    // Hanya jika backend meminta (stop disengaja, sesi >= 2 menit, pengaturan aktif).
+    const unlisten = onSessionSummary(() => {
+      ipc
+        .sessionGetState(false)
+        .then((s) => {
+          if (s.focusId) setTab("history");
+        })
+        .catch(() => {});
+    });
     return () => {
       unlisten.then((fn) => fn());
     };

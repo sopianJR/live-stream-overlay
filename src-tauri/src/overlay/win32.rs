@@ -54,6 +54,14 @@ pub fn show_no_activate(win: &WebviewWindow) {
     assert_topmost(win);
 }
 
+/// Menampilkan window biasa (bukan overlay) tanpa mengaktifkannya dan tanpa topmost.
+pub fn show_inactive(win: &WebviewWindow) {
+    let Some(hwnd) = hwnd_of(win) else { return };
+    unsafe {
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    }
+}
+
 pub fn hide(win: &WebviewWindow) {
     let Some(hwnd) = hwnd_of(win) else { return };
     unsafe {

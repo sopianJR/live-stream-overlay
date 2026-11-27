@@ -118,7 +118,8 @@ pub struct SessionSummary {
     pub duration_ms: u64,
     /// `None` = masih berjalan.
     pub end_reason: Option<EndReason>,
-    /// Berapa kali stream putus lalu dilanjutkan.
+    /// Berapa kali stream putus lalu dimulai ulang (koneksi OBS yang sempat putus
+    /// sementara stream tetap berjalan tidak dihitung).
     pub drops: u32,
     /// Berapa kali OBS menyambung ulang (reconnecting) di tengah live.
     pub reconnects: u32,
@@ -178,8 +179,11 @@ struct Live {
     started_t: u64,
     /// Polling melihat stream mati; menunggu event STOPPED.
     stop_seen_at: Option<u64>,
-    /// Stream putus; menunggu live lagi.
+    /// Stream putus (atau koneksi OBS putus); menunggu live lagi.
     lost_at: Option<u64>,
+    /// Baru kembali live setelah putus; `drops` dihitung hanya jika OBS ternyata memulai
+    /// stream baru (durasi/frame kembali dari nol).
+    resuming: bool,
     /// Durasi & frame segmen-segmen sebelumnya (sebelum putus).
     duration_base: u64,
     frames_base: (u32, u32),
@@ -198,10 +202,12 @@ struct Live {
 
 impl Live {
     fn new(t: &Tick) -> Self {
+        // Aplikasi bisa tersambung saat stream sudah berjalan: mulai dihitung dari durasi OBS.
+        let started_at = t.wall_ms.saturating_sub(t.duration_ms);
         Self {
             summary: SessionSummary {
-                id: format!("s{}", t.wall_ms),
-                started_at: t.wall_ms,
+                id: format!("s{started_at}"),
+                started_at,
                 ended_at: None,
                 duration_ms: 0,
                 end_reason: None,
@@ -217,6 +223,7 @@ impl Live {
             started_t: t.t_ms,
             stop_seen_at: None,
             lost_at: None,
+            resuming: false,
             duration_base: 0,
             frames_base: (0, 0),
             segment: (0, 0, 0),
@@ -249,10 +256,15 @@ impl Live {
     }
 
     fn record_live(&mut self, t: &Tick) {
-        // Frame OBS turun = stats di-reset (segmen baru tanpa terdeteksi putus).
+        // Durasi/frame OBS turun = stream baru dimulai (stats di-reset). Jika durasi terus naik,
+        // stream tidak pernah berhenti (mis. hanya koneksi ke OBS yang sempat putus).
         if t.total_frames < self.segment.2 || t.duration_ms < self.segment.0 {
             self.close_segment();
+            if self.resuming {
+                self.summary.drops += 1;
+            }
         }
+        self.resuming = false;
         self.segment = (t.duration_ms, t.dropped_frames, t.total_frames);
         self.summary.duration_ms = self.duration_base + t.duration_ms;
 
@@ -342,7 +354,7 @@ impl Recorder {
         if live {
             let session = self.live.get_or_insert_with(|| Live::new(t));
             if session.lost_at.take().is_some() {
-                session.summary.drops += 1;
+                session.resuming = true;
             }
             session.stop_seen_at = None;
             session.record_live(t);
@@ -361,15 +373,15 @@ impl Recorder {
         let stop = t.last_stop.filter(|s| s.at_ms + STOP_MATCH_MS >= seen);
         match stop {
             Some(StreamStop { graceful: true, .. }) if t.obs_connected => self.finish(t.wall_ms, EndReason::Stopped),
+            // Segmen tidak ditutup di sini: `record_live` menutupnya jika OBS ternyata memulai
+            // stream baru, sehingga stream yang tetap berjalan tidak dihitung dua kali.
             Some(_) => {
                 session.lost_at = Some(t.t_ms);
-                session.close_segment();
                 None
             }
             // OBS putus, atau STOPPED tidak kunjung datang: anggap putus, tunggu live lagi.
             None if !t.obs_connected || t.t_ms >= seen + STOP_EVENT_WAIT_MS => {
                 session.lost_at = Some(t.t_ms);
-                session.close_segment();
                 None
             }
             None => None,
@@ -387,8 +399,11 @@ impl Recorder {
     /// Pesan chat dari `chat://update`; ID yang sudah pernah dihitung diabaikan.
     pub fn on_chat(&mut self, messages: &[ChatMessage]) {
         let Some(session) = self.live.as_mut().filter(|s| s.lost_at.is_none()) else { return };
+        let started_at = i64::try_from(session.summary.started_at).unwrap_or(i64::MAX);
         for m in messages {
-            if !session.mark_seen(&m.id) {
+            // Riwayat chat yang diputar ulang saat tersambung bisa berisi pesan dari sebelum live.
+            let before_live = m.timestamp_ms > 0 && m.timestamp_ms < started_at;
+            if before_live || !session.mark_seen(&m.id) {
                 continue;
             }
             let chat = &mut session.summary.chat;
@@ -611,13 +626,42 @@ mod tests {
     }
 
     #[test]
-    fn obs_disconnect_counts_as_drop() {
+    fn obs_connection_blip_is_not_a_drop() {
+        // Koneksi ke OBS putus 30 detik, tapi stream tetap berjalan (durasi OBS terus naik).
         let mut r = Recorder::default();
         run_live(&mut r, 0, 30 * SEC);
         let gone = Tick { obs_connected: false, ..tick(30 * SEC, false) };
         assert!(r.on_tick(&gone).is_none());
         run_live(&mut r, 60 * SEC, 70 * SEC);
-        assert_eq!(r.current().unwrap().drops, 1);
+        let c = r.current().unwrap();
+        assert_eq!(c.drops, 0);
+        assert_eq!(c.duration_ms, 69 * SEC, "tidak dihitung dua kali");
+        assert_eq!((c.stream.dropped_frames, c.stream.total_frames), (69, 69 * 60));
+    }
+
+    #[test]
+    fn joining_a_running_stream_backdates_start() {
+        let mut r = Recorder::default();
+        // Aplikasi tersambung saat stream sudah berjalan 30 menit.
+        let mut k = tick(5 * SEC, true);
+        k.duration_ms = 1_800 * SEC;
+        r.on_tick(&k);
+        let c = r.current().unwrap();
+        assert_eq!(c.started_at, WALL0 + 5 * SEC - 1_800 * SEC);
+        assert_eq!(c.id, format!("s{}", c.started_at));
+    }
+
+    #[test]
+    fn chat_from_before_live_is_ignored() {
+        let mut r = Recorder::default();
+        run_live(&mut r, 0, 5 * SEC);
+        let mut early = msg("lama", MessageKind::Text, "ani", None);
+        early.timestamp_ms = (WALL0 - 60 * SEC) as i64;
+        let mut fresh = msg("baru", MessageKind::Text, "budi", None);
+        fresh.timestamp_ms = (WALL0 + 2 * SEC) as i64;
+        r.on_chat(&[early, fresh]);
+        let c = r.current().unwrap();
+        assert_eq!((c.chat.messages, c.chat.chatters), (1, 1));
     }
 
     #[test]

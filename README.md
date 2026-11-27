@@ -52,9 +52,12 @@ Dibangun dengan **Tauri v2 (Rust) + React + TypeScript**. Semua servis jangka pa
     Super Chat, member baru, donasi Trakteer (tanpa test) + top donatur, rata-rata bitrate,
     frame drop, reconnect, dan timeline alert; grafik penonton & bitrate per menit
   - stream putus lalu live lagi dalam 3 menit dihitung satu sesi
-  - setelah stream selesai: info "Stream selesai" di overlay dan dashboard terbuka di tab Riwayat
-    (bisa dimatikan; sesi < 2 menit tidak membuka dashboard)
+  - setelah stream dihentikan: info "Stream selesai" di overlay dan dashboard terbuka di tab
+    Riwayat tanpa mengambil fokus dari game (bisa dimatikan; tidak dibuka untuk sesi < 2 menit
+    atau stream yang putus)
   - 30 sesi terakhir disimpan lokal; sesi yang terputus karena aplikasi ditutup dipulihkan
+  - koneksi ke OBS yang sempat putus sementara stream tetap berjalan tidak dihitung dua kali;
+    chat dari sebelum live tidak dihitung
 - **Balas chat dari overlay** (opsional, butuh login Google):
   - kotak balas di bawah chat saat mode edit; klik nama penonton untuk menyebut `@nama`
   - login OAuth di browser (PKCE, redirect ke `127.0.0.1`), hanya scope `youtube.force-ssl`

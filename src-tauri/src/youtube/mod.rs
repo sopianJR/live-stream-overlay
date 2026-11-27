@@ -41,6 +41,8 @@ pub const UPDATE_EVENT: &str = "chat://update";
 /// Pesan lama yang ditampilkan saat baru tersambung ke sebuah live.
 const HISTORY_ON_CONNECT: usize = 20;
 const POLL_INTERVAL: Duration = Duration::from_millis(1500);
+/// Batas atas jeda saat chat sepi (halaman terakhir kosong) dan YouTube menyarankan lebih lama.
+const IDLE_POLL_INTERVAL: Duration = Duration::from_secs(3);
 const VIEWERS_INTERVAL: Duration = Duration::from_secs(30);
 const OFFLINE_RECHECK: Duration = Duration::from_secs(30);
 const NO_CHAT_RECHECK: Duration = Duration::from_secs(60);
@@ -198,11 +200,10 @@ fn recent_history(actions: Vec<ChatAction>, limit: usize) -> Vec<ChatAction> {
 }
 
 /// Jeda polling: ikuti saran YouTube untuk continuation berwaktu, tapi tetap responsif.
-fn poll_delay(next: &Continuation) -> Duration {
-    next.timeout_ms
-        .map(Duration::from_millis)
-        .unwrap_or(POLL_INTERVAL)
-        .clamp(Duration::from_secs(1), POLL_INTERVAL)
+/// Saat chat sepi (`idle`), jeda boleh lebih panjang (maks. 3 detik) agar request berkurang.
+fn poll_delay(next: &Continuation, idle: bool) -> Duration {
+    let max = if idle { IDLE_POLL_INTERVAL } else { POLL_INTERVAL };
+    next.timeout_ms.map(Duration::from_millis).unwrap_or(POLL_INTERVAL).clamp(Duration::from_secs(1), max)
 }
 
 fn backoff(failures: u32) -> Duration {
@@ -412,7 +413,8 @@ async fn session(
     apply(app, recent_history(page.actions, HISTORY_ON_CONNECT));
 
     let Some(mut next) = page.next else { return ended(source) };
-    let mut poll_at = Instant::now() + poll_delay(&next);
+    let mut poll_at = Instant::now() + poll_delay(&next, false);
+    let mut idle = false;
     let mut viewers_at = Instant::now() + VIEWERS_INTERVAL;
     let mut errors = 0u32;
 
@@ -425,6 +427,7 @@ async fn session(
                             errors = 0;
                             set_status(app, |s| s.message = None);
                         }
+                        idle = page.actions.is_empty();
                         apply(app, page.actions);
                         match page.next {
                             Some(n) => next = n,
@@ -440,7 +443,7 @@ async fn session(
                         set_status(app, |s| s.message = Some(format!("Gangguan sementara: {e}.")));
                     }
                 }
-                poll_at = Instant::now() + poll_delay(&next) * (errors + 1);
+                poll_at = Instant::now() + poll_delay(&next, idle) * (errors + 1);
             }
             _ = tokio::time::sleep_until(viewers_at) => {
                 if let Ok(Some(v)) = yt.viewership(&video_id).await {
@@ -485,9 +488,13 @@ mod tests {
     #[test]
     fn poll_delay_is_clamped() {
         let c = |t: Option<u64>| Continuation { token: String::new(), timeout_ms: t };
-        assert_eq!(poll_delay(&c(None)), POLL_INTERVAL);
-        assert_eq!(poll_delay(&c(Some(10_000))), POLL_INTERVAL);
-        assert_eq!(poll_delay(&c(Some(200))), Duration::from_secs(1));
+        assert_eq!(poll_delay(&c(None), false), POLL_INTERVAL);
+        assert_eq!(poll_delay(&c(Some(10_000)), false), POLL_INTERVAL);
+        assert_eq!(poll_delay(&c(Some(200)), false), Duration::from_secs(1));
+        // Chat sepi: saran YouTube yang lebih panjang diikuti sampai 3 detik.
+        assert_eq!(poll_delay(&c(Some(10_000)), true), IDLE_POLL_INTERVAL);
+        assert_eq!(poll_delay(&c(Some(2_000)), true), Duration::from_secs(2));
+        assert_eq!(poll_delay(&c(None), true), POLL_INTERVAL);
     }
 
     #[test]

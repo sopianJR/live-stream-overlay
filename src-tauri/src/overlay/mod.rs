@@ -302,6 +302,14 @@ pub fn set_content_protected(app: &AppHandle, enabled: bool) -> tauri::Result<Ov
     Ok(emit_status(app))
 }
 
+/// Menampilkan window lain (mis. dashboard) tanpa mencuri fokus dari game.
+pub fn show_window_inactive(win: &tauri::WebviewWindow) {
+    #[cfg(windows)]
+    win32::show_inactive(win);
+    #[cfg(not(windows))]
+    let _ = win.show();
+}
+
 /// Sebagian game ikut mengklaim topmost; tegaskan ulang posisi overlay secara berkala.
 pub fn spawn_topmost_watchdog(app: AppHandle) {
     std::thread::Builder::new()
