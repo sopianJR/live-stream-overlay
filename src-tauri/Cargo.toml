@@ -1,6 +1,6 @@
 [package]
 name = "livestream-overlay"
-version = "0.1.0"
+version = "0.2.0"
 description = "Overlay live chat YouTube + status OBS untuk streamer satu monitor"
 edition = "2021"
 
